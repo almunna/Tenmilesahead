@@ -1,0 +1,67 @@
+# Node / package managers
+node_modules
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Next.js
+.next
+.next/cache
+.next/trace
+.next/types
+out
+.vercel
+
+# Build artifacts
+dist
+coverage
+tmp
+*.tsbuildinfo
+
+# Env files (keep only templates in git)
+.env
+.env.*
+!.env.example
+
+# If you really want to keep .env.production out of git too (recommended)
+# (You can still COPY it in Docker if it exists locally)
+# .env.production
+
+# Firebase (local/emulator & credentials)
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+**/serviceAccount*.json
+**/firebase-adminsdk-*.json
+**/credentials.json
+**/creds.json
+
+# Certificates / keys (never commit)
+**/*.pem
+**/*.key
+**/*.crt
+**/id_rsa
+**/id_rsa.pub
+**/.ssh/
+**/secrets/
+**/config/secrets/
+**/private/
+**/config/private/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# Docker
+docker-compose.override.yml
+# If you output any local runtime data:
+.docker/
+.env.local
+.env.production

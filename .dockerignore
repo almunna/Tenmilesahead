@@ -1,0 +1,27 @@
+# Node / Next artifacts
+node_modules
+.next/cache
+.next/trace
+.next/types
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# VCS & OS junk
+.git
+.gitignore
+.DS_Store
+
+# Tests / local
+coverage
+tmp
+dist
+
+# Env files — keep prod only
+.env*
+!.env.production
+
+# Editor / misc
+.vscode
+.idea

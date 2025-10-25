@@ -1,0 +1,5 @@
+<!-- public/logo.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect rx="24" width="128" height="128" fill="#0ea5e9"></rect>
+  <path d="M28 84L52 44l16 24 12-8 20 24" stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>

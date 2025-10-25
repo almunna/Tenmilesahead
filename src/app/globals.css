@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#__next {
+  height: 100%;
+}
+
+:root {
+  --bg: #ffffff;
+  --fg: #0f172a; /* slate-900 */
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.container {
+  @apply max-w-6xl mx-auto px-4;
+}
+.btn {
+  @apply inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-white hover:bg-brand-dark transition;
+}
+.card {
+  @apply rounded-2xl border border-slate-200 p-4 shadow-sm bg-white;
+}
+.input {
+  @apply w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-brand;
+}
+.label {
+  @apply text-sm font-medium text-slate-700;
+}
+.link {
+  @apply text-brand hover:text-brand-dark underline-offset-4 hover:underline;
+}
+.navlink {
+  @apply px-3 py-2 rounded-lg hover:bg-slate-100 transition;
+}
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.fluid-img {
+  @apply w-full h-auto rounded-lg;
+}
+kbd {
+  @apply inline-block rounded border px-1 text-xs font-mono bg-slate-50;
+}
