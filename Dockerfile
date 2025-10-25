@@ -72,6 +72,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# Ensure the non-root user can read/execute everything
+RUN chown -R nextjs:nextjs /app
+
 EXPOSE 3000
 
 # Healthcheck (optional; Render also has its own)
