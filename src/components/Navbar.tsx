@@ -30,7 +30,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2">
             <img
-              src="/logo.svg"
+              src="/logo.png"
               alt="Ten Miles Ahead"
               className="w-8 h-8 rounded-xl bg-brand"
             />

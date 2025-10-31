@@ -5,9 +5,13 @@ import AuthProvider from "../components/AuthProvider";
 import Navbar from "../components/Navbar";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Ten Miles Ahead",
-  description: "Milestone 1 — Trips, Uploader, Flipbook",
+  icons: {
+    icon: "/logo.png", // favicon in most browsers
+    shortcut: "/logo.png", // legacy shortcut icon
+    apple: "/logo.png", // iOS home screen icon
+  },
 };
 
 export default function RootLayout({
@@ -17,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-dvh bg-white text-slate-900 antialiased">
+      <body className="min-h-dvh text-slate-900 antialiased bg-blue-50 ">
         <AuthProvider>
           <Navbar />
           {children}

@@ -89,7 +89,7 @@ export default function Landing() {
   return (
     <main className="bg-white">
       {/* ————————— HERO ————————— */}
-      <section className="container py-12 md:py-16">
+      <section className="py-12 md:py-16 bg-blue-50 ">
         <div className="mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight">
             Your Adventure <span className="text-brand">Awaits</span>
@@ -168,7 +168,7 @@ export default function Landing() {
       </section>
 
       {/* ————————— PRICING (two cards; annual highlighted) ————————— */}
-      {/* <section className="container py-12">
+      <section className="container py-12">
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Simple, Affordable Pricing
         </h2>
@@ -182,10 +182,12 @@ export default function Landing() {
             price="$2.50"
             period="/mo"
             bullets={[
-              "Unlimited trips",
-              "Photo uploading & flipbooks",
-              "Export (CSV) — soon",
-              "Multi-device access",
+              "Unlimited trips & flipbooks",
+              "Private share links",
+              "Sync across all your devices",
+              "Early access to new features",
+              "Offline flipbook (soon)",
+              "Export PDF/CSV (soon)",
             ]}
             cta={{ href: "/subscribe", text: "Choose Monthly" }}
           />
@@ -195,10 +197,12 @@ export default function Landing() {
             price="$19.99"
             period="/yr"
             bullets={[
-              "Unlimited trips",
-              "Photo uploading & flipbooks",
-              "Export (CSV) — soon",
-              "Multi-device access",
+              "Everything in Monthly",
+              "Priority support for creators",
+              "Bonus: 2 months free vs monthly",
+              "Perfect for frequent travelers",
+              "Advanced media backups",
+              "Early access to experimental features",
             ]}
             highlight
             cta={{ href: "/subscribe", text: "Choose Annual" }}
@@ -208,7 +212,7 @@ export default function Landing() {
         <p className="text-center text-xs text-slate-500 mt-3">
           Launch pricing — secure your rate.
         </p>
-      </section> */}
+      </section>
 
       {/* ————————— FAQ (accordion list like SS) ————————— */}
       <section className="container py-12">
@@ -345,7 +349,8 @@ function PricingCard({
         ))}
       </ul>
 
-      <Link href={cta.href} className={`btn mt-6 ${highlight ? "w-full" : ""}`}>
+      {/* Make both buttons identical (remove highlight-based width) */}
+      <Link href={cta.href} className="btn mt-6">
         {cta.text}
       </Link>
     </div>

@@ -1,12 +1,30 @@
+// lib/types.ts
+
 export type Trip = {
   id?: string;
   ownerId: string;
-  name: string;
-  startDate: string; // ISO yyyy-MM-dd
-  endDate: string;   // ISO yyyy-MM-dd
-  country: string;
-  transportationType: string;
-  accommodationType: string;
+
+  // Basic
+  name: string; // Trip Title *
+  city: string; // *
+  state?: string | null; // optional
+  country: string; // *
+
+  // Logistics
+  transportationType: string; // *
+  accommodationType?: string | null; // optional
+
+  // Location details
+  specificAddress?: string | null;
+
+  // Timing
+  startDate: string; // ISO yyyy-MM-dd *
+  endDate: string; // ISO yyyy-MM-dd *
+
+  // Notes
+  description?: string | null;
+
+  // Media/meta
   coverMediaId?: string | null;
   createdAt: number;
   updatedAt: number;

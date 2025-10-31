@@ -1,6 +1,6 @@
 "use client";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
 import {
   doc,
@@ -37,6 +37,22 @@ function TripInner() {
   const [openFlip, setOpenFlip] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Derived helpers
+  const coverMedia = useMemo(
+    () => (trip ? media.find((m) => m.id === trip.coverMediaId) : undefined),
+    [media, trip]
+  );
+  const locationStr = useMemo(() => {
+    if (!trip) return "";
+    const cityState = trip.city
+      ? `${trip.city}${trip.state ? ", " + trip.state : ""}`
+      : "";
+    if (trip.country)
+      return cityState ? `${cityState}, ${trip.country}` : trip.country;
+    return cityState || "—";
+  }, [trip]);
+  const dateRange = trip ? `${trip.startDate} → ${trip.endDate}` : "";
+
   // Listen to the trip doc (ownership enforced by rules; we also check client-side)
   useEffect(() => {
     if (!tripId || !user) return;
@@ -71,7 +87,7 @@ function TripInner() {
 
   // Listen to media for this trip
   useEffect(() => {
-    if (!tripId) return;
+    if (!tripId || !user) return;
 
     const q = query(
       collection(db, "trips", tripId, "media"),
@@ -92,7 +108,7 @@ function TripInner() {
     );
 
     return () => unsub();
-  }, [tripId]);
+  }, [tripId, user]);
 
   async function setCover(mid: string) {
     if (!trip) return;
@@ -112,7 +128,7 @@ function TripInner() {
   }
 
   return (
-    <div className="container py-8 space-y-6">
+    <div className="container py-8 space-y-6 bg-blue-50 ">
       {error && (
         <div className="card border-red-300">
           <div className="text-red-700 text-sm">{error}</div>
@@ -125,24 +141,76 @@ function TripInner() {
       )}
 
       {trip && !error && (
-        <div className="card">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold">{trip.name}</h1>
-              <div className="text-sm text-slate-600">
-                {trip.country} · {trip.startDate} → {trip.endDate}
+        <>
+          {/* Header & Cover */}
+          <div className="card overflow-hidden">
+            {coverMedia ? (
+              coverMedia.type === "image" ? (
+                <img
+                  src={coverMedia.downloadURL}
+                  alt={trip.name}
+                  className="w-full max-h-[360px] object-cover"
+                />
+              ) : (
+                <video
+                  src={coverMedia.downloadURL}
+                  className="w-full max-h-[360px] object-cover"
+                  controls
+                />
+              )
+            ) : (
+              <div className="h-40 w-full bg-slate-100 flex items-center justify-center text-slate-500 text-sm">
+                No cover yet — choose “Set as cover” on any media below
+              </div>
+            )}
+
+            <div className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-semibold">{trip.name}</h1>
+                <div className="text-sm text-slate-600">{locationStr}</div>
+                <div className="text-sm text-slate-700">{dateRange}</div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {trip.transportationType && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100">
+                      {trip.transportationType}
+                    </span>
+                  )}
+                  {trip.accommodationType && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100">
+                      {trip.accommodationType}
+                    </span>
+                  )}
+                </div>
+
+                {trip.specificAddress && (
+                  <div className="mt-2 text-xs text-slate-600">
+                    Address: {trip.specificAddress}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button className="btn" onClick={() => setOpenFlip(true)}>
+                  Open Flipbook
+                </button>
+                <Link className="navlink" href="/trips">
+                  Back
+                </Link>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button className="btn" onClick={() => setOpenFlip(true)}>
-                Open Flipbook
-              </button>
-              <Link className="navlink" href="/trips">
-                Back
-              </Link>
-            </div>
           </div>
-        </div>
+
+          {/* Description */}
+          {(trip.description || "").trim().length > 0 && (
+            <div className="card">
+              <h2 className="text-lg font-semibold mb-2">Description</h2>
+              <p className="text-slate-700 whitespace-pre-wrap">
+                {trip.description}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {user && trip && !error && (
