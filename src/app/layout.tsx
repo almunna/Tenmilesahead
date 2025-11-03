@@ -5,7 +5,7 @@ import AuthProvider from "../components/AuthProvider";
 import Navbar from "../components/Navbar";
 import SiteFooter from "../components/SiteFooter";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Ten Miles Ahead",
   icons: {
     icon: "/logo.png", // favicon in most browsers
@@ -21,11 +21,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-dvh text-slate-900 antialiased bg-blue-50 ">
+      {/* swapped to palette tokens */}
+      <body className="min-h-dvh antialiased bg-background text-foreground site-bg">
         <AuthProvider>
-          <Navbar />
-          {children}
-          <SiteFooter />
+          {/* keep content above decorative background layers */}
+          <div className="relative z-10">
+            <Navbar />
+            {children}
+            <SiteFooter />
+          </div>
         </AuthProvider>
       </body>
     </html>

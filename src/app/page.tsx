@@ -87,14 +87,15 @@ const features = [
 
 export default function Landing() {
   return (
-    <main className="bg-white">
+    // make page content sit above the decorative site-bg layers
+    <main className="bg-background relative z-10">
       {/* ————————— HERO ————————— */}
-      <section className="py-12 md:py-16 bg-blue-50 ">
+      <section className="py-12 md:py-16 bg-surface/50">
         <div className="mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight">
-            Your Adventure <span className="text-brand">Awaits</span>
+            Your Adventure <span className="text-primary">Awaits</span>
           </h1>
-          <p className="mt-4 text-slate-600">
+          <p className="mt-4 text-muted-foreground">
             Ten Miles Ahead is the ultimate travel journal for modern explorers.
             Log your trips, create beautiful photo stories, and share your
             journey with the world
@@ -119,7 +120,7 @@ export default function Landing() {
               </a>
             </div>
           </div>
-          <p className=" mt-2">
+          <p className=" mt-2 text-muted-foreground">
             Start Your Journey to be a link to subscription page
           </p>
         </div>
@@ -130,7 +131,7 @@ export default function Landing() {
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Everything You Need to Manage Your Trips
         </h2>
-        <p className="text-center text-slate-600 mt-2">
+        <p className="text-center text-muted-foreground mt-2">
           Effortlessly document all your journeys, from weekend getaways to epic
           adventures across the globe.
         </p>
@@ -145,11 +146,11 @@ export default function Landing() {
       {/* ————————— VALUE STRIP (gradient band with 3 points) ————————— */}
       <section className="py-12">
         <div className="container">
-          <div className="card bg-gradient-to-br from-brand/15 to-brand/5 text-center">
+          <div className="card bg-gradient-to-br from-primary/15 to-primary/5 text-center">
             <h3 className="text-2xl font-bold">
               Why Travelers Love Ten Miles Ahead
             </h3>
-            <div className="mt-6 grid gap-6 md:grid-cols-3 text-slate-700">
+            <div className="mt-6 grid gap-6 md:grid-cols-3 text-foreground">
               <ValueItem
                 title="Save Time"
                 text="Bulk uploads and clear organization so you can focus on your adventures."
@@ -172,7 +173,7 @@ export default function Landing() {
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Simple, Affordable Pricing
         </h2>
-        <p className="text-center text-slate-600 mt-2">
+        <p className="text-center text-muted-foreground mt-2">
           Choose the plan that works for you
         </p>
 
@@ -209,7 +210,7 @@ export default function Landing() {
           />
         </div>
 
-        <p className="text-center text-xs text-slate-500 mt-3">
+        <p className="text-center text-xs text-muted-foreground mt-3">
           Launch pricing — secure your rate.
         </p>
       </section>
@@ -219,7 +220,7 @@ export default function Landing() {
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Frequently Asked Questions
         </h2>
-        <p className="text-center text-slate-600 mt-2">
+        <p className="text-center text-muted-foreground mt-2">
           Get answers to common questions
         </p>
 
@@ -227,13 +228,13 @@ export default function Landing() {
           {faqs.map((f, i) => (
             <details key={i} className="card">
               <summary className="cursor-pointer font-semibold">{f.q}</summary>
-              <div className="mt-2 text-slate-700">{f.a}</div>
+              <div className="mt-2 text-foreground">{f.a}</div>
             </details>
           ))}
 
           <div className="card text-center">
             <div className="font-semibold">Still have questions?</div>
-            <p className="text-slate-600 mt-1">We’re here to help.</p>
+            <p className="text-muted-foreground mt-1">We’re here to help.</p>
             <div className="mt-3 flex justify-center gap-4">
               <a className="navlink" href="mailto:admin@tenmilesahead.com">
                 Contact Us
@@ -251,7 +252,7 @@ export default function Landing() {
         <h2 className="text-2xl md:text-3xl font-bold">
           Ready to Transform Your Travel Journal?
         </h2>
-        <p className="text-slate-600 mt-2">
+        <p className="text-muted-foreground mt-2">
           Join travelers already saving time and staying organized with Ten
           Miles Ahead.
         </p>
@@ -263,7 +264,7 @@ export default function Landing() {
             Sign in
           </Link>
         </div>
-        <p className="text-xs text-slate-500 mt-3">
+        <p className="text-xs text-muted-foreground mt-3">
           No setup. Cancel anytime. Secure payments.
         </p>
       </section>
@@ -278,15 +279,15 @@ function FeatureCard({ title, bullets }: { title: string; bullets: string[] }) {
     <div className="card">
       <div className="flex items-start gap-3">
         {/* Icon placeholder (keeps your palette) */}
-        <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center">
-          <div className="w-3 h-3 rounded-full bg-brand/80" />
+        <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+          <div className="w-3 h-3 rounded-full bg-primary/80" />
         </div>
         <div>
           <h3 className="text-lg font-semibold">{title}</h3>
-          <ul className="mt-3 space-y-2 text-slate-600 text-sm">
+          <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
             {bullets.map((b, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className="mt-0.5 inline-block w-2 h-2 rounded-full bg-brand/80" />
+                <span className="mt-0.5 inline-block w-2 h-2 rounded-full bg-primary/80" />
                 <span>{b}</span>
               </li>
             ))}
@@ -300,11 +301,11 @@ function FeatureCard({ title, bullets }: { title: string; bullets: string[] }) {
 function ValueItem({ title, text }: { title: string; text: string }) {
   return (
     <div className="px-2">
-      <div className="mx-auto w-12 h-12 rounded-2xl bg-brand/20 flex items-center justify-center">
-        <div className="w-3 h-3 rounded-full bg-brand/80" />
+      <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center">
+        <div className="w-3 h-3 rounded-full bg-primary/80" />
       </div>
       <div className="mt-3 text-lg font-semibold">{title}</div>
-      <p className="text-slate-700 mt-1">{text}</p>
+      <p className="text-foreground mt-1">{text}</p>
     </div>
   );
 }
@@ -327,23 +328,25 @@ function PricingCard({
   cta: { href: string; text: string };
 }) {
   return (
-    <div className={`card relative ${highlight ? "ring-2 ring-brand/70" : ""}`}>
+    <div
+      className={`card relative ${highlight ? "ring-2 ring-primary/70" : ""}`}
+    >
       {badge && (
-        <div className="absolute -top-3 right-3 text-xs bg-brand/90 text-white px-2 py-1 rounded-md">
+        <div className="absolute -top-3 right-3 text-xs bg-primary/90 text-foreground px-2 py-1 rounded-md">
           {badge}
         </div>
       )}
 
-      <div className="text-slate-700">{label}</div>
+      <div className="text-foreground">{label}</div>
       <div className="mt-1 flex items-end gap-2">
         <div className="text-3xl font-bold">{price}</div>
-        <div className="text-slate-600 mb-1">{period}</div>
+        <div className="text-muted-foreground mb-1">{period}</div>
       </div>
 
-      <ul className="mt-4 space-y-2 text-slate-600 text-sm">
+      <ul className="mt-4 space-y-2 text-muted-foreground text-sm">
         {bullets.map((b, i) => (
           <li key={i} className="flex items-start gap-2">
-            <span className="mt-0.5 inline-block w-2 h-2 rounded-full bg-brand/80" />
+            <span className="mt-0.5 inline-block w-2 h-2 rounded-full bg-primary/80" />
             <span>{b}</span>
           </li>
         ))}

@@ -2,51 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Page sizing --- */
 html,
 body,
 #__next {
   height: 100%;
 }
 
-:root {
-  --bg: #ffffff;
-  --fg: #0f172a; /* slate-900 */
-}
-
+/* --- Global colors from the new palette --- */
+/* We use Tailwind utilities so everything stays in-sync with your theme tokens. */
 body {
-  background: var(--bg);
-  color: var(--fg);
+  @apply bg-background text-foreground antialiased;
 }
 
+/* --- Decorative background like the mock (vignette + faint wordmark) --- */
+.site-bg {
+  position: relative;
+}
+.site-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  /* soft blobs using your palette tones */
+  background: radial-gradient(
+      1200px 600px at 50% -120px,
+      rgba(102, 191, 204, 0.15),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 450px at 75% 15%,
+      rgba(51, 77, 102, 0.12),
+      transparent 60%
+    );
+}
+.site-bg::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("/logo.png"); /* /public/logo.png */
+  background-repeat: no-repeat;
+  background-position: center 64px; /* shift down from top a bit */
+  background-size: clamp(300px, 40vw, 560px) auto;
+  opacity: 0.08; /* faint like the screenshot */
+  filter: saturate(0.9) brightness(1.05);
+}
+
+/* --- Layout helpers --- */
 .container {
   @apply max-w-6xl mx-auto px-4;
 }
+
+/* --- Components --- */
 .btn {
-  @apply inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-white hover:bg-brand-dark transition;
+  /* Primary action: Sky Dive (#66bfcc) with hover to Cedar/Hydro ramp */
+  @apply inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-black 
+         hover:bg-primary-600 transition border border-border ring-offset-0 focus:outline-none focus:ring-2 focus:ring-ring;
 }
+
 .card {
-  @apply rounded-2xl border border-slate-200 p-4 shadow-sm bg-white;
+  /* Dark surface card with subtle border */
+  @apply rounded-2xl border border-border p-4 shadow-sm bg-surface text-foreground;
 }
+
 .input {
-  @apply w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-brand;
+  /* Inputs that sit on surface; clear focus ring */
+  @apply w-full rounded-xl border border-border bg-transparent px-3 py-2 text-foreground
+         placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-ring;
 }
+
 .label {
-  @apply text-sm font-medium text-slate-700;
+  @apply text-sm font-medium text-muted-foreground;
 }
+
 .link {
-  @apply text-brand hover:text-brand-dark underline-offset-4 hover:underline;
+  /* Accent links in the palette */
+  @apply text-primary hover:text-primary-600 underline-offset-4 hover:underline;
 }
+
 .navlink {
-  @apply px-3 py-2 rounded-lg hover:bg-slate-100 transition;
+  /* Quiet hover on dark surface */
+  @apply px-3 py-2 rounded-lg hover:bg-surface transition text-foreground;
 }
+
 .grid-auto {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1rem;
 }
+
 .fluid-img {
   @apply w-full h-auto rounded-lg;
 }
+
 kbd {
-  @apply inline-block rounded border px-1 text-xs font-mono bg-slate-50;
+  @apply inline-block rounded border border-border px-1 text-xs font-mono bg-surface text-foreground;
 }
