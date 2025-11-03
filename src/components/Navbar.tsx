@@ -32,7 +32,7 @@ export default function Navbar() {
             <img
               src="/logo.png"
               alt="Ten Miles Ahead"
-              className="w-8 h-8 rounded-xl bg-brand"
+              className="w-8 h-8 rounded-m bg-slate-100"
             />
             <span className="font-bold">Ten Miles Ahead</span>
           </Link>
