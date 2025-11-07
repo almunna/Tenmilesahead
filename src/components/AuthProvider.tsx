@@ -1,7 +1,13 @@
 "use client";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
-import { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import type { UserProfile } from "../lib/types";
 
@@ -34,58 +40,71 @@ export default function AuthProvider({
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Watch Firebase Auth state
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
-      setUser(u);
+  // keep the latest profile unsubscribe so we can tear it down properly
+  const profileUnsubRef = useRef<(() => void) | null>(null);
 
-      // Clean any previous profile listener
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      // tear down any prior profile listener when auth changes
+      if (profileUnsubRef.current) {
+        profileUnsubRef.current();
+        profileUnsubRef.current = null;
+      }
+
+      setUser(u);
       setProfile(null);
+      setLoading(true);
 
       if (!u) {
+        // signed out: nothing to read
         setLoading(false);
         return;
       }
 
-      const ref = doc(db, "users", u.uid);
-      const snap = await getDoc(ref);
+      try {
+        const ref = doc(db, "users", u.uid);
 
-      // Create profile doc once if missing
-      if (!snap.exists()) {
-        try {
+        // Ensure the profile doc exists BEFORE we attach onSnapshot.
+        // Keep payload minimal to satisfy stricter rules variants.
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
           const p: UserProfile = {
             uid: u.uid,
             email: u.email ?? null,
-            username: "", // force set by user later (Protected will gate)
-            photoURL: u.photoURL ?? null,
+            username: "", // filled later by user
+            // omit extra fields if rules enforce a tight schema
             createdAt: Date.now(),
             updatedAt: Date.now(),
           };
           await setDoc(ref, p);
-        } catch (e) {
-          // If rules or network fail, surface minimal info and continue
-          console.error("Failed to create profile:", e);
         }
+
+        // Now safe to listen live
+        profileUnsubRef.current = onSnapshot(
+          ref,
+          (s) => {
+            if (s.exists()) setProfile(s.data() as UserProfile);
+            setLoading(false);
+          },
+          (err) => {
+            console.error("Profile listener error:", err);
+            setLoading(false);
+          }
+        );
+      } catch (e) {
+        console.error("Auth/profile bootstrap error:", e);
+        setLoading(false);
       }
-
-      // Live-listen to profile for changes (username, etc.)
-      const unsubProfile = onSnapshot(
-        ref,
-        (s) => {
-          if (s.exists()) setProfile(s.data() as UserProfile);
-          setLoading(false);
-        },
-        (err) => {
-          console.error("Profile listener error:", err);
-          setLoading(false);
-        }
-      );
-
-      // Teardown when auth user changes/unmounts
-      return () => unsubProfile();
     });
 
-    return () => unsubAuth();
+    // On unmount, also tear down profile listener
+    return () => {
+      unsubAuth();
+      if (profileUnsubRef.current) {
+        profileUnsubRef.current();
+        profileUnsubRef.current = null;
+      }
+    };
   }, []);
 
   async function refreshProfile() {

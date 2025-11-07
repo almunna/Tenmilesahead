@@ -10,13 +10,42 @@ import {
   where,
   doc,
   deleteDoc,
-  updateDoc, // ⬅️ NEW
+  setDoc,
+  updateDoc,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
+import {
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Trip, MediaItem } from "@/lib/types";
 import { COUNTRIES, getStates } from "@/lib/geo";
+import EditTripModal from "@/components/EditTripModal";
+import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
+
+/** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
+const isOtherish = (s: string) => {
+  const t = s.trim().toLowerCase();
+  return (
+    t === "other" ||
+    t === "others" ||
+    t === "—" ||
+    t === "-" ||
+    t === "n/a" ||
+    t === "none"
+  );
+};
+const sortAZWithOtherLast = (
+  list: readonly string[] | string[] = []
+): string[] => {
+  const arr = [...list].sort((a, b) => a.localeCompare(b));
+  const tail = arr.filter(isOtherish);
+  const head = arr.filter((x) => !isOtherish(x));
+  return [...head, ...tail];
+};
 
 const TRANSPORT_OPTIONS = [
   "Bicycle",
@@ -70,6 +99,89 @@ function TripsInner() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
 
+  // NEW: pre-create media selection + preview/captions/cover
+  const [photosToAdd, setPhotosToAdd] = useState<File[]>([]);
+  const [videosToAdd, setVideosToAdd] = useState<File[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+
+  // captions keyed by file key; preview URLs for object URLs; chosen cover key
+  const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [coverKey, setCoverKey] = useState<string | null>(null);
+
+  const fileKey = (f: File) => `${f.name}__${f.size}__${f.lastModified}`;
+  const selectedFiles = useMemo(
+    () => [...photosToAdd, ...videosToAdd],
+    [photosToAdd, videosToAdd]
+  );
+  const selectedKeys = useMemo(
+    () => selectedFiles.map(fileKey),
+    [selectedFiles]
+  );
+
+  // Manage preview object URLs and cleanup removed ones
+  useEffect(() => {
+    setPreviewUrls((prev) => {
+      const next = { ...prev };
+      // Add new previews
+      for (const f of selectedFiles) {
+        const k = fileKey(f);
+        if (!next[k]) next[k] = URL.createObjectURL(f);
+      }
+      // Remove previews for files no longer selected
+      for (const k of Object.keys(next)) {
+        if (!selectedKeys.includes(k)) {
+          URL.revokeObjectURL(next[k]);
+          delete next[k];
+        }
+      }
+      return next;
+    });
+  }, [selectedFiles, selectedKeys]);
+
+  // Cleanup all object URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const u of Object.values(previewUrls)) URL.revokeObjectURL(u);
+    };
+  }, [previewUrls]);
+
+  // Ensure a cover is chosen: default to first image if none or removed
+  useEffect(() => {
+    const firstImg = photosToAdd[0];
+    if (!coverKey) {
+      if (firstImg) setCoverKey(fileKey(firstImg));
+    } else if (!selectedKeys.includes(coverKey)) {
+      setCoverKey(firstImg ? fileKey(firstImg) : null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photosToAdd, selectedKeys.join("|")]);
+
+  function setCaption(k: string, v: string) {
+    setCaptions((prev) => ({ ...prev, [k]: v }));
+  }
+  function removeDraft(k: string) {
+    setPhotosToAdd((prev) => prev.filter((f) => fileKey(f) !== k));
+    setVideosToAdd((prev) => prev.filter((f) => fileKey(f) !== k));
+    setCaptions((prev) => {
+      const next = { ...prev };
+      delete next[k];
+      return next;
+    });
+    setPreviewUrls((prev) => {
+      const next = { ...prev };
+      if (next[k]) {
+        URL.revokeObjectURL(next[k]);
+        delete next[k];
+      }
+      return next;
+    });
+    if (coverKey === k) {
+      const firstImg = photosToAdd.find((f) => fileKey(f) !== k);
+      setCoverKey(firstImg ? fileKey(firstImg) : null);
+    }
+  }
+
   const canSubmit = useMemo(() => {
     return (
       !!form.name &&
@@ -101,7 +213,7 @@ function TripsInner() {
 
   async function createTrip(e: React.FormEvent) {
     e.preventDefault();
-    if (!user || !canSubmit) return;
+    if (!user || !canSubmit || uploadingMedia) return;
 
     const now = Date.now();
     const payload: Trip = {
@@ -121,8 +233,71 @@ function TripsInner() {
       updatedAt: now,
     };
 
-    await addDoc(collection(db, "trips"), payload as any);
+    // 1) Create the trip
+    const tripRef = await addDoc(collection(db, "trips"), payload as any);
 
+    // 2) Upload selected media (use captions + chosen cover)
+    // 2) Upload selected media (use captions + chosen cover)
+    const allFiles = [...selectedFiles];
+    if (allFiles.length > 0) {
+      setUploadingMedia(true);
+      try {
+        let chosenCoverMediaId: string | null = null;
+        let firstImageMediaId: string | null = null;
+
+        for (const file of allFiles) {
+          const k = fileKey(file);
+          const isImage = file.type.startsWith("image/");
+          const isVideo = file.type.startsWith("video/");
+          const kind = isImage ? "image" : isVideo ? "video" : "other";
+          if (kind === "other") continue;
+
+          // Pre-create a Firestore media doc so we have a stable mediaId
+          const mediaRef = doc(collection(db, "trips", tripRef.id, "media"));
+          const mediaId = mediaRef.id;
+
+          // Storage path that matches your Storage rules
+          const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+          const storagePath = `trip_media/${user.uid}/${tripRef.id}/${mediaId}/${safeName}`;
+
+          // Upload to Storage
+          const sref = storageRef(storage, storagePath);
+          await uploadBytes(sref, file);
+          const downloadURL = await getDownloadURL(sref);
+
+          // Write media doc with all required fields (matches Firestore rules)
+          await setDoc(mediaRef, {
+            tripId: tripRef.id,
+            type: kind, // "image" | "video"
+            storagePath, // REQUIRED by rules
+            downloadURL, // REQUIRED by rules
+            createdAt: Date.now(), // REQUIRED by rules
+            caption: captions[k] || "", // optional
+            fileName: file.name, // optional (kept for convenience)
+            size: file.size, // optional
+            contentType: file.type, // optional
+          } as any);
+
+          if (isImage) {
+            if (k === coverKey && !chosenCoverMediaId)
+              chosenCoverMediaId = mediaId;
+            if (!firstImageMediaId) firstImageMediaId = mediaId;
+          }
+        }
+
+        const coverIdToUse = chosenCoverMediaId || firstImageMediaId;
+        if (coverIdToUse) {
+          await updateDoc(doc(db, "trips", tripRef.id), {
+            coverMediaId: coverIdToUse,
+            updatedAt: Date.now(),
+          } as any);
+        }
+      } finally {
+        setUploadingMedia(false);
+      }
+    }
+
+    // 3) Reset the form and file pickers
     setForm({
       name: "",
       city: "",
@@ -135,6 +310,11 @@ function TripsInner() {
       endDate: "",
       description: "",
     });
+    setPhotosToAdd([]);
+    setVideosToAdd([]);
+    setCaptions({});
+    setPreviewUrls({});
+    setCoverKey(null);
   }
 
   async function deleteTrip(id: string) {
@@ -163,9 +343,10 @@ function TripsInner() {
   const clip = (s?: string | null, n = 120) =>
     s ? (s.length > n ? s.slice(0, n) + "…" : s) : "";
 
-  // --- derived states list for creator form based on selected country
+  // --- sorted lists for UI ---
+  const sortedCountries = useMemo(() => sortAZWithOtherLast(COUNTRIES), []);
   const availableStates = useMemo(
-    () => getStates(form.country),
+    () => sortAZWithOtherLast(getStates(form.country)),
     [form.country]
   );
 
@@ -202,7 +383,7 @@ function TripsInner() {
               required
             >
               <option value="">Select country</option>
-              {COUNTRIES.map((c) => (
+              {sortedCountries.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -326,25 +507,109 @@ function TripsInner() {
             />
           </div>
 
-          <div className="hidden md:block" />
+          {/* Media pickers (separate component) */}
+          <TripCreateMediaPicker
+            photos={photosToAdd}
+            videos={videosToAdd}
+            onPhotosChange={setPhotosToAdd}
+            onVideosChange={setVideosToAdd}
+          />
 
-          {/* Description */}
+          {/* NEW: Media preview/editor like the screenshot */}
           <div className="md:col-span-3">
-            <label className="label">Description</label>
-            <textarea
-              className="input h-32 resize-y"
-              placeholder="Share your memories..."
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-            />
+            <h3 className="text-lg font-semibold mb-3">Media</h3>
+
+            {selectedFiles.length === 0 ? (
+              <div className="text-muted-foreground text-sm">
+                No media selected yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {selectedFiles.map((f) => {
+                  const k = fileKey(f);
+                  const isImage = f.type.startsWith("image/");
+                  const url = previewUrls[k];
+                  return (
+                    <div key={k} className="card space-y-2">
+                      <div className="w-full h-60 rounded-xl overflow-hidden bg-haiti-800/5">
+                        {isImage ? (
+                          <img
+                            src={url}
+                            alt={f.name}
+                            className="w-full h-full object-cover"
+                            draggable={false}
+                          />
+                        ) : (
+                          <video
+                            src={url}
+                            className="w-full h-full object-cover"
+                            controls
+                            preload="metadata"
+                          />
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          className={
+                            coverKey === k
+                              ? "text-sm text-green-600 cursor-default"
+                              : "text-sm link"
+                          }
+                          onClick={() => coverKey !== k && setCoverKey(k)}
+                          disabled={coverKey === k}
+                        >
+                          {coverKey === k ? "✓ Cover" : "Set as cover"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="text-sm text-red-600"
+                          onClick={() => removeDraft(k)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="label">Caption</label>
+                        <textarea
+                          className="input h-auto min-h-[44px] leading-5 resize-none overflow-hidden"
+                          rows={1}
+                          placeholder="Add a caption…"
+                          value={captions[k] || ""}
+                          onChange={(e) => {
+                            setCaption(k, e.target.value);
+                          }}
+                          onInput={(e) => {
+                            const ta = e.currentTarget;
+                            ta.style.height = "auto";
+                            ta.style.height = `${ta.scrollHeight}px`;
+                          }}
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = "auto";
+                              el.style.height = `${el.scrollHeight}px`;
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
           <div className="md:col-span-3 flex gap-3">
-            <button className="btn" type="submit" disabled={!canSubmit}>
-              Add Trip
+            <button
+              className="btn"
+              type="submit"
+              disabled={!canSubmit || uploadingMedia}
+            >
+              {uploadingMedia ? "Creating & Uploading…" : "Add Trip"}
             </button>
             <button
               className="navlink"
@@ -479,240 +744,12 @@ function TripsInner() {
       </div>
 
       {/* Edit modal */}
-      {editingTrip && (
+      {editingTrip ? (
         <EditTripModal
           trip={editingTrip}
           onClose={() => setEditingTrip(null)}
         />
-      )}
-    </div>
-  );
-}
-
-/** --- EditTripModal: in-place editing for all fields --- */
-function EditTripModal({ trip, onClose }: { trip: Trip; onClose: () => void }) {
-  const [saving, setSaving] = useState(false);
-  const [f, setF] = useState({
-    name: trip.name || "",
-    city: trip.city || "",
-    state: trip.state || "",
-    country: trip.country || "",
-    transportationType: trip.transportationType || "",
-    accommodationType: trip.accommodationType || "",
-    specificAddress: trip.specificAddress || "",
-    startDate: trip.startDate || "",
-    endDate: trip.endDate || "",
-    description: trip.description || "",
-  });
-
-  const canSave =
-    f.name &&
-    f.city &&
-    f.country &&
-    f.transportationType &&
-    f.startDate &&
-    f.endDate;
-
-  // --- derived states list for modal based on selected country
-  const availableStates = useMemo(() => getStates(f.country), [f.country]);
-
-  async function save() {
-    if (!canSave || !trip.id) return;
-    setSaving(true);
-    try {
-      const ref = doc(db, "trips", trip.id);
-      await updateDoc(ref, {
-        name: f.name,
-        city: f.city,
-        state: f.state || null,
-        country: f.country,
-        transportationType: f.transportationType,
-        accommodationType: f.accommodationType,
-        specificAddress: f.specificAddress || null,
-        startDate: f.startDate,
-        endDate: f.endDate,
-        description: f.description || null,
-        updatedAt: Date.now(),
-      } as any);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-2xl rounded-lg bg-surface text-foreground border border-border shadow-lg p-4 md:p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Edit Trip</h3>
-          <button className="navlink" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4">
-          {/* Trip Title */}
-          <div className="md:col-span-3">
-            <label className="label">Trip Title *</label>
-            <input
-              className="input"
-              value={f.name}
-              onChange={(e) => setF({ ...f, name: e.target.value })}
-            />
-          </div>
-
-          {/* City / State / Country */}
-          <div>
-            <label className="label">City *</label>
-            <input
-              className="input"
-              value={f.city}
-              onChange={(e) => setF({ ...f, city: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="label">
-              {availableStates.length
-                ? "State / Province"
-                : "State / Province (free text)"}
-            </label>
-            {availableStates.length ? (
-              <select
-                className="input"
-                value={f.state}
-                onChange={(e) => setF({ ...f, state: e.target.value })}
-              >
-                <option value="">Select state/province</option>
-                {availableStates.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="input"
-                value={f.state}
-                onChange={(e) => setF({ ...f, state: e.target.value })}
-              />
-            )}
-          </div>
-
-          <div>
-            <label className="label">Country *</label>
-            <select
-              className="input"
-              value={f.country}
-              onChange={(e) => {
-                const newCountry = e.target.value;
-                const states = getStates(newCountry);
-                const nextState = states.includes(f.state) ? f.state : "";
-                setF({ ...f, country: newCountry, state: nextState });
-              }}
-            >
-              <option value="">Select country</option>
-              {COUNTRIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Transportation / Accommodation */}
-          <div>
-            <label className="label">Mode of Transportation *</label>
-            <select
-              className="input"
-              value={f.transportationType}
-              onChange={(e) =>
-                setF({ ...f, transportationType: e.target.value })
-              }
-            >
-              <option value="">Select transportation</option>
-              {TRANSPORT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Accommodation Type</label>
-            <select
-              className="input"
-              value={f.accommodationType}
-              onChange={(e) =>
-                setF({ ...f, accommodationType: e.target.value })
-              }
-            >
-              <option value="">Select accommodation</option>
-              {ACCOMMODATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Address */}
-          <div className="md:col-span-3">
-            <label className="label">Specific Address</label>
-            <input
-              className="input"
-              value={f.specificAddress}
-              onChange={(e) => setF({ ...f, specificAddress: e.target.value })}
-            />
-          </div>
-
-          {/* Dates */}
-          <div>
-            <label className="label">Start Date *</label>
-            <input
-              className="input"
-              type="date"
-              value={f.startDate}
-              onChange={(e) => setF({ ...f, startDate: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">End Date *</label>
-            <input
-              className="input"
-              type="date"
-              value={f.endDate}
-              onChange={(e) => setF({ ...f, endDate: e.target.value })}
-            />
-          </div>
-
-          {/* Description */}
-          <div className="md:col-span-3">
-            <label className="label">Description</label>
-            <textarea
-              className="input h-28 resize-y"
-              value={f.description}
-              onChange={(e) => setF({ ...f, description: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center gap-3">
-          <button className="btn" onClick={save} disabled={!canSave || saving}>
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-          <button className="navlink" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -801,7 +838,6 @@ function CoverThumb({
     setDragging(true);
     const next = calcFocusFromEvent(e);
     setFocus(next);
-    // save on start so quick taps work
     persistFocus(next);
   }
 
@@ -818,7 +854,6 @@ function CoverThumb({
     }
   }
 
-  // empty state
   if (!cover) {
     return (
       <div className="aspect-[16/9] w-full bg-haiti-800/5 flex items-center justify-center text-muted-foreground text-xs">
@@ -827,7 +862,6 @@ function CoverThumb({
     );
   }
 
-  // shared props for image/video
   const mediaProps = {
     style: { objectPosition: `${focus.x}% ${focus.y}%` },
     className: "w-full h-full object-cover select-none pointer-events-none",

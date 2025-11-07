@@ -1,3 +1,4 @@
+// File: app/trips/[tripId]/page.tsx (or wherever your TripPage lives)
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,30 +17,8 @@ import { useAuth } from "@/components/AuthProvider";
 import Protected from "@/components/Protected";
 import Uploader from "@/components/Uploader";
 import Flipbook from "@/components/Flipbook";
+import EditTripModal from "@/components/EditTripModal"; // ✅ use the shared component
 import Link from "next/link";
-
-/* ▼▼ Same option lists used in the list-page editor ▼▼ */
-const TRANSPORT_OPTIONS = [
-  "Flight",
-  "Train",
-  "Bus",
-  "Car",
-  "Ferry/Boat",
-  "Bicycle",
-  "Walking",
-  "Other",
-];
-
-const ACCOMMODATION_OPTIONS = [
-  "Hotel",
-  "Hostel",
-  "Guesthouse",
-  "Apartment / Airbnb",
-  "Resort",
-  "Camping",
-  "Friend/Family",
-  "Other",
-];
 
 /* Helpers */
 function fmtMDY(s: string | undefined | null) {
@@ -59,7 +38,6 @@ function fmtMDY(s: string | undefined | null) {
 /** Auto-size helper for textareas (shows full caption immediately) */
 function autoSizeTextarea(el: HTMLTextAreaElement | null) {
   if (!el) return;
-  // Reset to measure correctly, then grow to fit
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
 }
@@ -81,18 +59,18 @@ function TripInner() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [openFlip, setOpenFlip] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false); // ← NEW: edit modal toggle
+  const [openEdit, setOpenEdit] = useState(false); // ← uses shared modal
   const [error, setError] = useState<string | null>(null);
 
-  // NEW: cover position state (percent, 0–100; default 50 = center)
+  // cover position state (percent, 0–100; default 50 = center)
   const [coverPosY, setCoverPosY] = useState<number>(50);
   const draggingRef = useRef(false);
 
-  // NEW: uploader visibility & auto-hide after upload completes
+  // uploader visibility & auto-hide after upload completes
   const [showUploader, setShowUploader] = useState(true);
   const prevMediaCount = useRef<number>(0);
 
-  // --- Derived helpers
+  // Derived helpers
   const coverMedia = useMemo(
     () => (trip ? media.find((m) => m.id === trip.coverMediaId) : undefined),
     [media, trip]
@@ -120,7 +98,7 @@ function TripInner() {
     }
   }, [trip?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Listen to the trip doc (ownership enforced by rules; we also check client-side)
+  // Listen to the trip doc
   useEffect(() => {
     if (!tripId || !user) return;
 
@@ -134,7 +112,6 @@ function TripInner() {
           return;
         }
         const data = { id: snap.id, ...(snap.data() as any) } as Trip;
-        // Client-side guard: ensure owner matches signed-in user
         if (data.ownerId !== user.uid) {
           setError("You don't have permission to view this trip.");
           setTrip(null);
@@ -152,7 +129,7 @@ function TripInner() {
     return () => unsub();
   }, [tripId, user]);
 
-  // Listen to media for this trip (LATEST FIRST)
+  // Listen to media (LATEST FIRST)
   useEffect(() => {
     if (!tripId || !user) return;
 
@@ -168,7 +145,6 @@ function TripInner() {
         setMedia(arr);
       },
       (err) => {
-        // Typically permission or (rarely) index issues
         setError(err.message || "Failed to load media.");
         setMedia([]);
       }
@@ -177,11 +153,11 @@ function TripInner() {
     return () => unsub();
   }, [tripId, user]);
 
-  // Auto-hide uploader after a successful upload (media count increases while uploader visible)
+  // Auto-hide uploader after a successful upload
   useEffect(() => {
     const prev = prevMediaCount.current;
     if (showUploader && media.length > prev) {
-      setShowUploader(false); // closes uploader; hides any lingering progress bars
+      setShowUploader(false);
     }
     prevMediaCount.current = media.length;
   }, [media.length, showUploader]);
@@ -192,7 +168,6 @@ function TripInner() {
       coverMediaId: mid,
       updatedAt: Date.now(),
     });
-    // Local optimistic update to reflect immediately
     setTrip({ ...trip, coverMediaId: mid });
   }
 
@@ -204,7 +179,7 @@ function TripInner() {
     await deleteDoc(doc(db, "trips", tripId, "media", mid));
   }
 
-  // NEW: cover dragging handlers
+  // cover dragging handlers
   function onCoverPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     draggingRef.current = true;
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
@@ -214,7 +189,6 @@ function TripInner() {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
-    // persist to Firestore
     if (trip?.id) {
       await updateDoc(doc(db, "trips", trip.id), {
         coverPositionY: coverPosY,
@@ -230,7 +204,7 @@ function TripInner() {
     setCoverPosY(pct);
   }
 
-  // --- Derived: cover first, then latest-first sort ---
+  // cover first, then latest-first
   const sortedMedia = useMemo(() => {
     const coverId = trip?.coverMediaId;
     const getMillis = (t: any) => {
@@ -247,7 +221,6 @@ function TripInner() {
         if (a.id === coverId && b.id !== coverId) return -1;
         if (b.id === coverId && a.id !== coverId) return 1;
       }
-      // latest (desc) after cover
       return getMillis(b.createdAt) - getMillis(a.createdAt);
     });
     return arr;
@@ -273,9 +246,7 @@ function TripInner() {
             {coverMedia ? (
               coverMedia.type === "image" ? (
                 <div
-                  key={
-                    trip?.coverMediaId /* ← forces a fresh mount on change */
-                  }
+                  key={trip?.coverMediaId}
                   className="relative w-full"
                   style={{ height: "360px", cursor: "grab" }}
                   title="Drag to reposition"
@@ -296,7 +267,7 @@ function TripInner() {
                 </div>
               ) : (
                 <video
-                  key={trip?.coverMediaId /* keep parity with img case */}
+                  key={trip?.coverMediaId}
                   src={coverMedia.downloadURL}
                   className="w-full max-h-[360px] object-cover"
                   controls
@@ -338,11 +309,9 @@ function TripInner() {
               </div>
 
               <div className="flex gap-2">
-                {/* TODO (Flipbook component): make arrows more visible and sort by taken date asc */}
                 <button className="btn" onClick={() => setOpenFlip(true)}>
                   Open Flipbook
                 </button>
-                {/* ← NEW Edit button */}
                 <button className="btn" onClick={() => setOpenEdit(true)}>
                   Edit
                 </button>
@@ -365,7 +334,7 @@ function TripInner() {
         </>
       )}
 
-      {/* === Uploader AT TOP, above images === */}
+      {/* Uploader */}
       {user && trip && !error && (
         <div className="card">
           <div className="flex items-center justify-between">
@@ -378,7 +347,6 @@ function TripInner() {
           </div>
           {showUploader && (
             <div className="mt-3">
-              {/* We auto-close this after media count grows */}
               <Uploader ownerId={user.uid} tripId={trip.id!} />
             </div>
           )}
@@ -390,7 +358,7 @@ function TripInner() {
         </div>
       )}
 
-      {/* === Media grid: cover first, then latest first; uniform card heights === */}
+      {/* Media grid */}
       {!error && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -436,7 +404,6 @@ function TripInner() {
 
                 <div>
                   <label className="label">Caption</label>
-                  {/* Auto-resizing textarea (shows full text immediately) */}
                   <textarea
                     className="input h-auto min-h-[44px] leading-5 resize-none overflow-hidden"
                     defaultValue={m.caption || ""}
@@ -458,211 +425,17 @@ function TripInner() {
         </div>
       )}
 
-      {/* NOTE: Flipbook improvements needed inside the component:
-         - Make arrows larger/high-contrast
-         - Sort by (takenAt || createdAt) ASC for chronological order */}
+      {/* Flipbook */}
       <Flipbook
         tripId={tripId}
         open={openFlip}
         onClose={() => setOpenFlip(false)}
       />
 
-      {/* ← inline edit modal */}
+      {/* Shared Edit Modal */}
       {openEdit && trip && (
         <EditTripModal trip={trip} onClose={() => setOpenEdit(false)} />
       )}
-    </div>
-  );
-}
-
-/** --- EditTripModal: same fields & UX as list-page editor --- */
-function EditTripModal({ trip, onClose }: { trip: Trip; onClose: () => void }) {
-  const [saving, setSaving] = useState(false);
-  const [f, setF] = useState({
-    name: trip.name || "",
-    city: trip.city || "",
-    state: (trip.state as string) || "",
-    country: trip.country || "",
-    transportationType: trip.transportationType || "",
-    accommodationType: trip.accommodationType || "",
-    specificAddress: (trip.specificAddress as string) || "",
-    startDate: trip.startDate || "",
-    endDate: trip.endDate || "",
-    description: (trip.description as string) || "",
-  });
-
-  const canSave =
-    f.name &&
-    f.city &&
-    f.country &&
-    f.transportationType &&
-    f.startDate &&
-    f.endDate;
-
-  async function save() {
-    if (!trip.id || !canSave) return;
-    setSaving(true);
-    try {
-      const ref = doc(db, "trips", trip.id);
-      await updateDoc(ref, {
-        name: f.name,
-        city: f.city,
-        state: f.state || null,
-        country: f.country,
-        transportationType: f.transportationType,
-        accommodationType: f.accommodationType,
-        specificAddress: f.specificAddress || null,
-        startDate: f.startDate,
-        endDate: f.endDate,
-        description: f.description || null,
-        updatedAt: Date.now(),
-      } as any);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-2xl rounded-lg bg-surface text-foreground border border-border shadow-lg p-4 md:p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Edit Trip</h3>
-          <button className="navlink" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-4">
-          {/* Trip Title */}
-          <div className="md:col-span-3">
-            <label className="label">Trip Title *</label>
-            <input
-              className="input"
-              value={f.name}
-              onChange={(e) => setF({ ...f, name: e.target.value })}
-            />
-          </div>
-
-          {/* City / State / Country */}
-          <div>
-            <label className="label">City *</label>
-            <input
-              className="input"
-              value={f.city}
-              onChange={(e) => setF({ ...f, city: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">State</label>
-            <input
-              className="input"
-              value={f.state}
-              onChange={(e) => setF({ ...f, state: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Country *</label>
-            <input
-              className="input"
-              value={f.country}
-              onChange={(e) => setF({ ...f, country: e.target.value })}
-            />
-          </div>
-
-          {/* Transportation / Accommodation */}
-          <div>
-            <label className="label">Mode of Transportation *</label>
-            <select
-              className="input"
-              value={f.transportationType}
-              onChange={(e) =>
-                setF({ ...f, transportationType: e.target.value })
-              }
-            >
-              <option value="">Select transportation</option>
-              {TRANSPORT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Accommodation Type</label>
-            <select
-              className="input"
-              value={f.accommodationType}
-              onChange={(e) =>
-                setF({ ...f, accommodationType: e.target.value })
-              }
-            >
-              <option value="">Select accommodation</option>
-              {ACCOMMODATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Address */}
-          <div className="md:col-span-3">
-            <label className="label">Specific Address</label>
-            <input
-              className="input"
-              value={f.specificAddress}
-              onChange={(e) => setF({ ...f, specificAddress: e.target.value })}
-            />
-          </div>
-
-          {/* Dates */}
-          <div>
-            <label className="label">Start Date *</label>
-            <input
-              className="input"
-              type="date"
-              value={f.startDate}
-              onChange={(e) => setF({ ...f, startDate: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">End Date *</label>
-            <input
-              className="input"
-              type="date"
-              value={f.endDate}
-              onChange={(e) => setF({ ...f, endDate: e.target.value })}
-            />
-          </div>
-
-          {/* Description */}
-          <div className="md:col-span-3">
-            <label className="label">Description</label>
-            <textarea
-              className="input h-28 resize-y"
-              value={f.description}
-              onChange={(e) => setF({ ...f, description: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center gap-3">
-          <button className="btn" onClick={save} disabled={!canSave || saving}>
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-          <button className="navlink" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
