@@ -331,6 +331,14 @@ function TripsInner() {
     return cityState || "—";
   };
   const fmt = (d: string | number | Date) => {
+    // Handle ISO date strings (YYYY-MM-DD) without timezone conversion
+    if (typeof d === "string") {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+      if (match) {
+        return `${match[2]}/${match[3]}/${match[1]}`;
+      }
+    }
+    // Fallback for timestamps
     const dt = new Date(d);
     const m = String(dt.getMonth() + 1).padStart(2, "0");
     const day = String(dt.getDate()).padStart(2, "0");
@@ -391,30 +399,34 @@ function TripsInner() {
             </select>
           </div>
 
-          {/* State / Province */}
+          {/* State / Province / Island */}
           <div>
-            <label className="label">
-              {availableStates.length
-                ? "State / Province"
-                : "State / Province (free text)"}
-            </label>
+            <label className="label">State / Province / Island</label>
             {availableStates.length ? (
-              <select
-                className="input"
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
-              >
-                <option value="">Select state/province</option>
-                {availableStates.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  className="input"
+                  value={availableStates.includes(form.state) ? form.state : ""}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                >
+                  <option value="">Select from list</option>
+                  {availableStates.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input mt-2"
+                  placeholder="Enter manually"
+                  value={availableStates.includes(form.state) ? "" : form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                />
+              </>
             ) : (
               <input
                 className="input"
-                placeholder="e.g., California"
+                placeholder="e.g., California, Bali, etc."
                 value={form.state}
                 onChange={(e) => setForm({ ...form, state: e.target.value })}
               />
@@ -659,7 +671,7 @@ function TripsInner() {
 
                 {menuOpenId === t.id && (
                   <div
-                    className="mt-2 w-36 rounded-md border border-border bg-surface shadow-md text-sm"
+                    className="absolute top-full right-0 mt-2 w-36 rounded-md border border-border bg-surface shadow-md text-sm"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
@@ -763,6 +775,9 @@ function CoverThumb({
   coverMediaId?: string | null;
 }) {
   const [cover, setCover] = useState<MediaItem | null>(null);
+  const [allMedia, setAllMedia] = useState<MediaItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showArrows, setShowArrows] = useState(false);
   const [focus, setFocus] = useState<{ x: number; y: number }>({
     x: 50,
     y: 50,
@@ -770,26 +785,44 @@ function CoverThumb({
   const [dragging, setDragging] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
-  // watch selected cover media
+  // watch all media for this trip
   useEffect(() => {
-    if (!coverMediaId) {
+    const q = query(
+      collection(db, "trips", tripId, "media"),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const arr: MediaItem[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setAllMedia(arr);
+      },
+      () => setAllMedia([])
+    );
+    return () => unsub();
+  }, [tripId]);
+
+  // set current media based on navigation
+  useEffect(() => {
+    if (allMedia.length === 0) {
       setCover(null);
       return;
     }
-    const ref = doc(db, "trips", tripId, "media", coverMediaId);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (!snap.exists()) {
-          setCover(null);
-          return;
-        }
-        setCover({ id: snap.id, ...(snap.data() as any) });
-      },
-      () => setCover(null)
-    );
-    return () => unsub();
-  }, [tripId, coverMediaId]);
+    const media = allMedia[currentIndex];
+    if (media) {
+      setCover(media);
+    }
+  }, [allMedia, currentIndex]);
+
+  // initialize index based on cover media
+  useEffect(() => {
+    if (!coverMediaId || allMedia.length === 0) return;
+    const idx = allMedia.findIndex((m) => m.id === coverMediaId);
+    if (idx !== -1) {
+      setCurrentIndex(idx);
+    }
+  }, [coverMediaId, allMedia]);
 
   // read coverFocus from trip (if present)
   useEffect(() => {
@@ -870,6 +903,20 @@ function CoverThumb({
     }
   }
 
+  function goToPrevious(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
+  }
+
+  function goToNext(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (currentIndex < allMedia.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    }
+  }
+
   if (!cover) {
     return (
       <div className="aspect-[16/9] w-full bg-haiti-800/5 flex items-center justify-center text-muted-foreground text-xs">
@@ -887,7 +934,7 @@ function CoverThumb({
   return (
     <div
       ref={boxRef}
-      className="relative aspect-[16/9] w-full overflow-hidden bg-black/5"
+      className="relative aspect-[16/9] w-full overflow-hidden bg-black/5 group"
       onMouseDown={startDrag}
       onMouseMove={moveDrag}
       onMouseUp={endDrag}
@@ -895,6 +942,7 @@ function CoverThumb({
       onTouchStart={startDrag}
       onTouchMove={moveDrag}
       onTouchEnd={endDrag}
+      onMouseEnter={() => setShowArrows(true)}
       aria-label="Drag to reposition cover"
       title="Drag to reposition cover"
     >
@@ -913,6 +961,39 @@ function CoverThumb({
           playsInline
           {...(mediaProps as any)}
         />
+      )}
+
+      {/* Navigation arrows - show on hover when multiple images */}
+      {allMedia.length > 1 && (
+        <>
+          {currentIndex > 0 && (
+            <button
+              type="button"
+              onClick={goToPrevious}
+              className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              aria-label="Previous image"
+            >
+              ←
+            </button>
+          )}
+          {currentIndex < allMedia.length - 1 && (
+            <button
+              type="button"
+              onClick={goToNext}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              aria-label="Next image"
+            >
+              →
+            </button>
+          )}
+        </>
+      )}
+
+      {/* Image counter */}
+      {allMedia.length > 1 && (
+        <div className="pointer-events-none absolute top-2 left-2 text-xs px-2 py-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+          {currentIndex + 1} / {allMedia.length}
+        </div>
       )}
 
       <div className="pointer-events-none absolute bottom-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white">

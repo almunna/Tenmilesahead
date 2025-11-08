@@ -546,28 +546,32 @@ export default function EditTripModal({
             </div>
 
             <div>
-              <label className="label">
-                {availableStates.length
-                  ? "State / Province"
-                  : "State / Province (free text)"}
-              </label>
+              <label className="label">State / Province / Island</label>
               {availableStates.length ? (
-                <select
-                  className="input"
-                  value={f.state}
-                  onChange={(e) => setF({ ...f, state: e.target.value })}
-                >
-                  <option value="">Select state/province</option>
-                  {availableStates.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    className="input"
+                    value={availableStates.includes(f.state) ? f.state : ""}
+                    onChange={(e) => setF({ ...f, state: e.target.value })}
+                  >
+                    <option value="">Select from list</option>
+                    {availableStates.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input mt-2"
+                    placeholder="Or enter manually (e.g., custom island)"
+                    value={availableStates.includes(f.state) ? "" : f.state}
+                    onChange={(e) => setF({ ...f, state: e.target.value })}
+                  />
+                </>
               ) : (
                 <input
                   className="input"
-                  placeholder="e.g., California"
+                  placeholder="e.g., California, Bali, etc."
                   value={f.state}
                   onChange={(e) => setF({ ...f, state: e.target.value })}
                 />
