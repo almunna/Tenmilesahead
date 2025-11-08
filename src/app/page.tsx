@@ -180,7 +180,7 @@ export default function Landing() {
         <div className="mt-8 grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
           <PricingCard
             label="Monthly Plan"
-            price="$2.50"
+            price="$4.99"
             period="/mo"
             bullets={[
               "Unlimited trips & flipbooks",
@@ -195,8 +195,9 @@ export default function Landing() {
           <PricingCard
             label="Annual Plan"
             badge="Best value"
-            price="$19.99"
+            price="$39.99"
             period="/yr"
+            savings="Save $19.89 annually"
             bullets={[
               "Everything in Monthly",
               "Priority support for creators",
@@ -315,6 +316,7 @@ function PricingCard({
   badge,
   price,
   period,
+  savings,
   bullets,
   highlight,
   cta,
@@ -323,6 +325,7 @@ function PricingCard({
   badge?: string;
   price: string;
   period: string;
+  savings?: string;
   bullets: string[];
   highlight?: boolean;
   cta: { href: string; text: string };
@@ -342,6 +345,9 @@ function PricingCard({
         <div className="text-3xl font-bold">{price}</div>
         <div className="text-muted-foreground mb-1">{period}</div>
       </div>
+      {savings && (
+        <div className="text-sm text-primary/80 mt-1">{savings}</div>
+      )}
 
       <ul className="mt-4 space-y-2 text-muted-foreground text-sm">
         {bullets.map((b, i) => (

@@ -825,16 +825,32 @@ function CoverThumb({
     return { x: Math.round(x * 100), y: Math.round(y * 100) };
   }
 
+  function clamp01(n: number) {
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  let lastSaved: { x: number; y: number } | null = null;
+
   async function persistFocus(next: { x: number; y: number }) {
+    // clamp to 0..100 and avoid redundant writes
+    const clamped = { x: clamp01(next.x), y: clamp01(next.y) };
+    if (lastSaved && lastSaved.x === clamped.x && lastSaved.y === clamped.y)
+      return;
+
     try {
-      await updateDoc(doc(db, "trips", tripId), { coverFocus: next } as any);
-    } catch {
-      /* ignore */
+      await updateDoc(doc(db, "trips", tripId), {
+        coverFocus: clamped,
+        updatedAt: Date.now(),
+      } as any);
+      lastSaved = clamped;
+    } catch (err) {
+      // optional: surface or log to help debug rules
+      // console.warn("persistFocus failed", err);
     }
   }
 
   function startDrag(e: React.MouseEvent | React.TouchEvent) {
-    e.preventDefault();
+    // e.preventDefault();
     setDragging(true);
     const next = calcFocusFromEvent(e);
     setFocus(next);

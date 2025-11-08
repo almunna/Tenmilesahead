@@ -23,16 +23,20 @@ import Link from "next/link";
 /* Helpers */
 function fmtMDY(s: string | undefined | null) {
   if (!s) return "";
-  // Handle "yyyy-mm-dd" quickly without Date parsing quirks
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+
+  // Convert to string if needed (in case Firestore returns an object)
+  const str = typeof s === "string" ? s : String(s);
+
+  // Handle "yyyy-mm-dd" format (ISO date string)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
   if (m) return `${m[2]}/${m[3]}/${m[1]}`;
-  // Fallback to Date
-  const d = new Date(s);
-  if (isNaN(+d)) return s;
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${mm}/${dd}/${yy}`;
+
+  // Handle "mm/dd/yyyy" format (already formatted)
+  const m2 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(str);
+  if (m2) return str;
+
+  // If it's already in some other format, just return it
+  return str;
 }
 
 /** Auto-size helper for textareas (shows full caption immediately) */

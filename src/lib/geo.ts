@@ -73,6 +73,87 @@ export const COUNTRIES = [
   "Peru",
   "New Zealand",
   "Australia",
+
+  // Caribbean & Central America
+  "Anguilla",
+  "Antigua and Barbuda",
+  "Aruba",
+  "Bahamas",
+  "Barbados",
+  "Belize",
+  "Bermuda",
+  "Bonaire",
+  "British Virgin Islands",
+  "Cayman Islands",
+  "Cuba",
+  "Curaçao",
+  "Dominica",
+  "Dominican Republic",
+  "Grenada",
+  "Haiti",
+  "Honduras",
+  "Jamaica",
+  "Montserrat",
+  "Puerto Rico",
+  "Saint Kitts and Nevis",
+  "Saint Lucia",
+  "Saint Vincent and Grenadines",
+  "Trinidad and Tobago",
+  "Turks and Caicos",
+  "United States (USVI)",
+
+  // South America (Additional)
+  "Ecuador",
+  "Venezuela",
+
+  // Africa (Additional)
+  "Comoros",
+  "Madagascar",
+  "Mauritius",
+  "Mozambique",
+  "Seychelles",
+  "Tanzania",
+  "São Tomé & Príncipe",
+
+  // Middle East (Additional)
+  "Yemen",
+
+  // Asia (Additional)
+  "Cambodia",
+  "Maldives",
+  "Taiwan",
+
+  // Pacific
+  "Cook Islands",
+  "Fiji",
+  "Kiribati",
+  "Marshall Islands",
+  "Micronesia",
+  "Nauru",
+  "Palau",
+  "Samoa",
+  "Solomon Islands",
+  "Tonga",
+  "Tuvalu",
+  "Vanuatu",
+
+  // Europe (Additional)
+  "Croatia",
+  "Iceland",
+  "Montenegro",
+
+  // Overseas Territories & Special Regions
+  "Antarctica",
+  "France (Mayotte)",
+  "Greenland",
+  "Guadeloupe (France)",
+  "Martinique (France)",
+  "Netherlands Antilles",
+  "New Caledonia (France)",
+  "Panama",
+  "Réunion (France)",
+  "Saint Barthélemy (France)",
+  "UK Overseas Territory",
 ] as const;
 
 export type Country = (typeof COUNTRIES)[number];
@@ -126,6 +207,30 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Ladakh",
     "Lakshadweep",
     "Puducherry",
+    // Additional islands/regions
+    "Agatti",
+    "Amini",
+    "Andrott",
+    "Bharatpur",
+    "Bitra",
+    "Car Nicobar",
+    "Chetlat",
+    "Govind Nagar",
+    "Great Nicobar",
+    "Havelock (Swaraj)",
+    "Havelock Island",
+    "Kadmat",
+    "Kalpeni",
+    "Katchal",
+    "Kavaratti",
+    "Kiltan",
+    "Little Andaman",
+    "Middle Andaman",
+    "Minicoy",
+    "Nancowry",
+    "Neil (Shaheed)",
+    "North Andaman",
+    "South Andaman",
   ],
 
   Pakistan: [
@@ -148,6 +253,10 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Southern",
     "Uva",
     "Western",
+    // Additional islands/regions
+    "Delft Island",
+    "Delft Town",
+    "Sri Lanka",
   ],
 
   Nepal: [
@@ -202,6 +311,21 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     // Special administrative regions (特别行政区)
     "Hong Kong",
     "Macau",
+
+    // Additional regions/islands
+    "Daishan Island",
+    "Gulangyu (Fujian)",
+    "Haikou",
+    "Hainan Island",
+    "Jintang Island",
+    "Liuheng Island",
+    "Pingtan (Fujian)",
+    "Sanya",
+    "Taohua Island",
+    "Xiushan Island",
+    "Yongxing Island (Xisha)",
+    "Zhoushan Island",
+    "Zhujiajian Island",
   ],
 
   Japan: [
@@ -252,6 +376,14 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Yamagata",
     "Yamaguchi",
     "Yamanashi",
+    // Additional islands/regions
+    "Hokkaido",
+    "Honshu",
+    "Kyushu",
+    "Miyanoura",
+    "Motomachi",
+    "Naha",
+    "Shikoku",
   ],
 
   "South Korea": [
@@ -272,6 +404,10 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Gyeongsangbuk-do",
     "Gyeongsangnam-do",
     "Jeju-do",
+    // Additional regions
+    "Jeju",
+    "Jeju City",
+    "Seogwipo",
   ],
 
   Indonesia: [
@@ -311,6 +447,20 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Central Papua",
     "Highland Papua",
     "Papua",
+    // Additional islands/regions
+    "Denpasar",
+    "Flores",
+    "Java",
+    "Kalimantan",
+    "Labuan Bajo",
+    "Loh Liang",
+    "Lombok",
+    "Mataram",
+    "Seminyak",
+    "Sulawesi",
+    "Sumatra",
+    "Sumbawa",
+    "Ubud",
   ],
 
   Malaysia: [
@@ -330,6 +480,19 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Kuala Lumpur",
     "Labuan",
     "Putrajaya",
+    // Additional islands/regions
+    "Borneo",
+    "George Town",
+    "Kampung Tekek",
+    "Kapas Island",
+    "Kuah",
+    "Langkawi",
+    "Penang Island",
+    "Perhentian Besar",
+    "Perhentian Kecil",
+    "Redang Island",
+    "Tenggol Island",
+    "Tioman Island",
   ],
 
   Thailand: [
@@ -409,6 +572,21 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Uttaradit",
     "Yala",
     "Yasothon",
+    // Additional islands/regions
+    "Chaweng",
+    "Koh Chang",
+    "Koh Kood",
+    "Koh Lanta",
+    "Koh Mak",
+    "Koh Phangan",
+    "Koh Phi Phi",
+    "Koh Samet",
+    "Koh Samui",
+    "Koh Tao",
+    "Koh Yao Noi",
+    "Mae Haad",
+    "Patong",
+    "Tonsai Village",
   ],
 
   Vietnam: [
@@ -475,6 +653,18 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Vĩnh Phúc",
     "Yên Bái",
     "Ho Chi Minh City (Thành phố Hồ Chí Minh)",
+    // Additional islands/regions
+    "Bạch Long Vĩ Island",
+    "Cát Bà Island",
+    "Côn Đảo Islands",
+    "Cù Lao Chàm",
+    "Duong Dong",
+    "Hòn Sơn Island",
+    "Hòn Tre Island",
+    "Lý Sơn Island",
+    "Nam Du Islands",
+    "Phú Quốc",
+    "Quang Ninh",
   ],
 
   Philippines: [
@@ -561,6 +751,29 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Zamboanga del Norte",
     "Zamboanga del Sur",
     "Zamboanga Sibugay",
+    // Additional islands/regions
+    "Calayan Island",
+    "Camiguin Island",
+    "Cebu City",
+    "Coron",
+    "Culion Island",
+    "Cuyo Island",
+    "El Nido",
+    "General Luna",
+    "Guimaras Island",
+    "Luzon",
+    "Malay",
+    "Mindanao",
+    "Mindoro",
+    "Negros",
+    "Panay",
+    "Puerto Princesa",
+    "Romblon Island",
+    "Samar",
+    "Siargao",
+    "Siargao Island",
+    "Tagbilaran",
+    "Ticao Island",
   ],
 
   Singapore: [
@@ -1003,6 +1216,33 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Stirling",
     "West Dunbartonshire",
     "West Lothian",
+    // Additional islands
+    "Eday",
+    "Hoy",
+    "Isle of Arran",
+    "Isle of Barra",
+    "Isle of Bute",
+    "Isle of Colonsay",
+    "Isle of Eigg",
+    "Isle of Gigha",
+    "Isle of Great Cumbrae",
+    "Isle of Iona",
+    "Isle of Islay",
+    "Isle of Jura",
+    "Isle of Lewis",
+    "Isle of Mull",
+    "Isle of Skye",
+    "Isle of Tiree",
+    "Mainland (Orkney)",
+    "North Ronaldsay",
+    "Papa Westray",
+    "Rousay",
+    "Sanday",
+    "Shapinsay",
+    "Shetland Mainland",
+    "South Ronaldsay",
+    "Stronsay",
+    "Westray",
   ],
 
   Wales: [
@@ -1085,12 +1325,17 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Nouvelle-Aquitaine",
     "Occitanie",
     "Pays de la Loire",
-    "Provence-Alpes-Côte d’Azur",
+    "Provence-Alpes-Côte d'Azur",
     "Guadeloupe",
     "Martinique",
     "Guyane (French Guiana)",
     "La Réunion",
     "Mayotte",
+    // Additional regions
+    "Corsica",
+    "Grande-Terre",
+    "Le Bourg",
+    "Porquerolles",
   ],
 
   Germany: [
@@ -1191,6 +1436,17 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Tuscany",
     "Umbria",
     "Veneto",
+    // Additional islands
+    "Capri",
+    "Capri Town",
+    "Ischia",
+    "Ischia Porto",
+    "Lampedusa",
+    "Lipari",
+    "Panarea",
+    "Procida",
+    "Procida Town",
+    "Stromboli",
   ],
 
   Spain: [
@@ -1211,6 +1467,16 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Navarre (Navarra)",
     "La Rioja",
     "Valencian Community (Comunitat Valenciana)",
+    // Additional islands
+    "Formentera",
+    "Ibiza",
+    "Lanzarote",
+    "Mahón",
+    "Mallorca",
+    "Minorca",
+    "Puerto del Rosario",
+    "Santa Cruz de la Palma",
+    "Tenerife",
   ],
 
   Portugal: [
@@ -1234,6 +1500,10 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Viseu",
     "Azores (Açores)",
     "Madeira",
+    // Additional islands/regions
+    "Angra do Heroísmo",
+    "Pico",
+    "São Miguel",
   ],
 
   Greece: [
@@ -1250,6 +1520,25 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Thessaly",
     "Western Greece",
     "Western Macedonia",
+    // Additional regions/islands
+    "Argostoli",
+    "Chania",
+    "Corfu",
+    "Corfu Town",
+    "Heraklion",
+    "Kefalonia",
+    "Kos",
+    "Lesbos",
+    "Mykonos",
+    "Naxos",
+    "Paros",
+    "Rhodes",
+    "Samos",
+    "Santorini",
+    "Skiathos",
+    "Tinos",
+    "Zakynthos",
+    "Zakynthos Town",
   ],
 
   Sweden: [
@@ -1288,6 +1577,8 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Vestfold og Telemark",
     "Vestland",
     "Viken",
+    // Additional regions
+    "Longyearbyen",
   ],
 
   Denmark: [
@@ -1296,6 +1587,8 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "North Jutland (Nordjylland)",
     "Zealand (Sjælland)",
     "Southern Denmark (Syddanmark)",
+    // Additional regions
+    "Faroe Islands",
   ],
 
   Finland: [
@@ -1521,6 +1814,9 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Northwest Territories",
     "Nunavut",
     "Yukon",
+    // Additional regions
+    "Iqaluit",
+    "Vancouver Island",
   ],
 
   Mexico: [
@@ -1556,6 +1852,9 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Veracruz",
     "Yucatán",
     "Zacatecas",
+    // Additional islands
+    "Cozumel",
+    "Isla Mujeres",
   ],
 
   Brazil: [
@@ -1586,6 +1885,10 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "São Paulo",
     "Sergipe",
     "Tocantins",
+    // Additional regions
+    "Brazil",
+    "Fernando de Noronha",
+    "Ilha Comprida",
   ],
 
   Argentina: [
@@ -1622,7 +1925,7 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Coquimbo",
     "Valparaíso",
     "Santiago Metropolitan (Región Metropolitana de Santiago)",
-    "Libertador General Bernardo O’Higgins",
+    "Libertador General Bernardo O'Higgins",
     "Maule",
     "Ñuble",
     "Biobío",
@@ -1631,6 +1934,8 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Los Lagos",
     "Aysén del General Carlos Ibáñez del Campo",
     "Magallanes y de la Antártica Chilena",
+    // Additional regions
+    "Chile",
   ],
 
   Colombia: [
@@ -1667,6 +1972,11 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Vaupés",
     "Vichada",
     "Bogotá D.C.",
+    // Additional regions
+    "Providencia",
+    "Providencia Island",
+    "San Andrés",
+    "Tierra Bomba Island",
   ],
 
   Peru: [
@@ -1726,6 +2036,354 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
     "Northern Territory",
     "Australian Capital Territory",
   ],
+
+  // --- New Countries from JSON ---
+  Anguilla: ["Anguilla"],
+
+  Antarctica: [
+    "Base Presidente Eduardo Frei",
+    "Grytviken",
+    "King George Island",
+    "Macquarie Base",
+    "McMurdo Station",
+    "Spanish Base",
+  ],
+
+  "Antigua and Barbuda": ["Antigua", "Barbuda"],
+
+  Aruba: ["Aruba"],
+
+  Bahamas: [
+    "Abaco Island",
+    "Acklins Island",
+    "Andros Island",
+    "Bimini",
+    "Cat Island",
+    "Crooked Island",
+    "Eleuthera",
+    "Grand Bahama",
+    "Great Exuma",
+    "Great Inagua",
+    "Long Island",
+    "Mayaguana",
+    "New Providence",
+    "Paradise Island",
+    "Ragged Island",
+  ],
+
+  Barbados: ["Barbados"],
+
+  Belize: ["Ambergris Caye", "Caye Caulker"],
+
+  Bermuda: [
+    "Bermuda",
+    "Devonshire Parish",
+    "Hamilton Parish",
+    "Paget Parish",
+    "Pembroke Parish",
+    "Sandys Parish",
+    "Smith's Parish",
+    "Southampton Parish",
+    "St. George's Parish",
+    "Warwick Parish",
+  ],
+
+  Bonaire: ["Bonaire"],
+
+  "British Virgin Islands": [
+    "Anegada",
+    "Cooper Island",
+    "Jost Van Dyke",
+    "Norman Island",
+    "Peter Island",
+    "Tortola",
+    "Virgin Gorda",
+  ],
+
+  Cambodia: [
+    "Koh Rong",
+    "Koh Rong Sanloem",
+    "Koh Sdach",
+    "Koh Ta Kiev",
+    "Koh Thmei",
+    "Koh Tonsay (Rabbit)",
+  ],
+
+  "Cayman Islands": ["Cayman Brac", "Grand Cayman", "Little Cayman"],
+
+  Comoros: ["Anjouan", "Grande Comore", "Mohéli"],
+
+  "Cook Islands": ["Cook Islands"],
+
+  Croatia: [
+    "Brač",
+    "Cres",
+    "Hvar",
+    "Korčula",
+    "Krk",
+    "Lošinj",
+    "Mljet",
+    "Pag",
+    "Rab",
+    "Vis",
+    "Šolta",
+  ],
+
+  Cuba: ["Cuba", "Isla de la Juventud"],
+
+  Curaçao: ["Curaçao"],
+
+  Dominica: ["Dominica"],
+
+  "Dominican Republic": [
+    "Azua",
+    "Bahoruco",
+    "Barahona",
+    "Dajabón",
+    "Distrito Nacional",
+    "Duarte",
+    "El Seibo",
+    "Elías Piña",
+    "Espaillat",
+    "Hato Mayor",
+    "Hermanas Mirabal",
+    "Independencia",
+    "La Altagracia",
+    "La Romana",
+    "La Vega",
+    "María Trinidad Sánchez",
+    "Monseñor Nouel",
+    "Monte Cristi",
+    "Monte Plata",
+    "Pedernales",
+    "Peravia",
+    "Puerto Plata",
+    "Samaná",
+    "San Cristóbal",
+    "San José de Ocoa",
+    "San Juan",
+    "San Pedro de Macorís",
+    "Santiago",
+    "Santiago Rodríguez",
+    "Santo Domingo Este",
+    "Santo Domingo Norte",
+    "Santo Domingo Oeste",
+    "Sánchez Ramírez",
+    "Valverde",
+  ],
+
+  Ecuador: [
+    "Puerto Ayora",
+    "Puerto Baquerizo Moreno",
+    "San Cristóbal",
+    "Santa Cruz",
+  ],
+
+  Fiji: ["Fiji", "Mamanuca Islands", "Yasawa Islands"],
+
+  "France (Mayotte)": ["Petite-Terre"],
+
+  Greenland: ["Greenland", "Qeqertarsuaq"],
+
+  Grenada: ["Carriacou", "Grenada"],
+
+  "Guadeloupe (France)": ["Basse-Terre"],
+
+  Haiti: [
+    "Artibonite",
+    "Grand'Anse",
+    "Hispaniola",
+    "La Gonâve Island",
+    "Nippes",
+    "Nord",
+    "Nord-Est",
+    "Nord-Ouest",
+    "Ouest",
+    "Sud",
+    "Sud-Est",
+  ],
+
+  Honduras: [
+    "Atlántida",
+    "Bay Islands",
+    "Choluteca",
+    "Colón",
+    "Comayagua",
+    "Cortés",
+    "Francisco Morazán",
+    "Honduras",
+    "Roatán",
+    "Utila",
+  ],
+
+  Iceland: ["Grimsey", "Iceland"],
+
+  Jamaica: ["Jamaica"],
+
+  Kiribati: ["Tarawa"],
+
+  Madagascar: [
+    "Ambodifotatra",
+    "Hell-Ville",
+    "Madagascar",
+    "Nosy Be",
+    "Île Sainte-Marie",
+  ],
+
+  Maldives: [
+    "Addu Atoll",
+    "Addu City",
+    "Baa Atoll",
+    "Dhihdhoo",
+    "Eydhafushi",
+    "Fonadhoo",
+    "Fuvahmulah",
+    "Kudahuvadhoo",
+    "Kulhudhuffushi",
+    "Laamu Atoll",
+    "Mahibadhoo",
+    "Malé",
+    "Manadhoo",
+    "Muli",
+    "Naifaru",
+    "Nilandhoo",
+    "Rasdhoo",
+    "Thinadhoo",
+    "Thulusdhoo",
+    "Villingili",
+  ],
+
+  "Marshall Islands": ["Marshall Islands"],
+
+  "Martinique (France)": ["Martinique"],
+
+  Mauritius: ["Mauritius Island", "Port Louis"],
+
+  Micronesia: ["Mocronesia"],
+
+  Montenegro: ["Montenegro"],
+
+  Montserrat: ["Montserrat"],
+
+  Mozambique: [
+    "Bazaruto Island",
+    "Benguerra Island",
+    "Ibo Island",
+    "Ibo Town",
+    "Ilha de Moçambique",
+    "Ilha dos Portugueses",
+    "Inhaca Island",
+    "Magaruque Island",
+    "Matemo Island",
+    "Medjumbe Island",
+    "Quirimba Island",
+    "Quirimbas Islands",
+    "Santa Carolina Island",
+  ],
+
+  Nauru: ["Nauru Island"],
+
+  "Netherlands Antilles": [
+    "Saba",
+    "Saint Martin (FR)",
+    "Sint Eustatius",
+    "Sint Maarten",
+  ],
+
+  "New Caledonia (France)": ["Grande Terre"],
+
+  Palau: ["Babeldaob", "Koror", "Melekeok", "Rock Islands"],
+
+  Panama: [
+    "Isla Bastimentos",
+    "Isla Carenero",
+    "Isla Colón",
+    "Isla Colón (Bocas del Toro)",
+    "Isla Contadora",
+    "Isla Cébaco",
+    "Isla del Rey",
+    "Isla Narganá",
+    "Isla Popa",
+    "Isla Saboga",
+    "Isla San José",
+    "Isla Solarte",
+    "Isla Taboga",
+    "Isla Tigre",
+    "Isla Ustupu",
+  ],
+
+  "Puerto Rico": ["Puerto Rico"],
+
+  Russia: ["Belushya Guba", "Yuzhno-Sakhalinsk"],
+
+  "Réunion (France)": ["Réunion"],
+
+  "Saint Barthélemy (France)": ["Saint Barthélemy"],
+
+  "Saint Kitts and Nevis": ["Nevis", "Saint Kitts"],
+
+  "Saint Lucia": ["Saint Lucia"],
+
+  "Saint Vincent and Grenadines": ["Bequia", "Saint Vincent", "Union Island"],
+
+  Samoa: ["Upolu"],
+
+  Seychelles: ["Baie Sainte Anne", "Mahé", "Praslin", "Victoria"],
+
+  "Solomon Islands": ["Guadalcanal"],
+
+  "São Tomé & Príncipe": [
+    "Príncipe",
+    "Santo António",
+    "São Tomé",
+    "São Tomé City",
+  ],
+
+  Taiwan: ["Penghu Islands", "Taiwan"],
+
+  Tanzania: [
+    "Chake-Chake",
+    "Pemba",
+    "Stone Town",
+    "Unguja",
+    "Unguja (Zanzibar)",
+    "Uzi Island",
+  ],
+
+  Tonga: ["Tongatapu"],
+
+  "Trinidad and Tobago": ["Tobago", "Trinidad"],
+
+  "Turks and Caicos": [
+    "East Caicos",
+    "Grand Turk",
+    "North Caicos",
+    "Parrot Cay",
+    "Providenciales",
+    "Salt Cay",
+    "South Caicos",
+  ],
+
+  Tuvalu: ["Funafuti"],
+
+  "UK Overseas Territory": [
+    "Ascension Island",
+    "Saint Helena",
+    "Tristan da Cunha",
+  ],
+
+  "United States (USVI)": [
+    "St. Croix",
+    "St. John",
+    "St. Thomas",
+    "Water Island",
+  ],
+
+  Vanuatu: ["Efate"],
+
+  Venezuela: ["Coche Island", "Cubagua Island", "Isla Margarita"],
+
+  Yemen: ["Socotra"],
 };
 
 export const getStates = (country?: string) =>
