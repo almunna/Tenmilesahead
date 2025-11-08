@@ -1,5 +1,8 @@
 // app/page.tsx
+"use client";
 import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
+import { useRouter } from "next/navigation";
 
 /** --- FAQ DATA --- */
 const faqs = [
@@ -86,6 +89,17 @@ const features = [
 ];
 
 export default function Landing() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const handleStartJourney = () => {
+    if (user) {
+      router.push("/trips");
+    } else {
+      router.push("/signin");
+    }
+  };
+
   return (
     // make page content sit above the decorative site-bg layers
     <main className="bg-background relative z-10">
@@ -101,7 +115,9 @@ export default function Landing() {
             journey with the world
           </p>
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <div className="btn">Start Your Journey!</div>
+            <button className="btn" onClick={handleStartJourney}>
+              Start Your Journey!
+            </button>
             <div className="flex items-center gap-3">
               {/* Replace with real store badge images/links when ready */}
               <a
@@ -120,9 +136,6 @@ export default function Landing() {
               </a>
             </div>
           </div>
-          <p className=" mt-2 text-muted-foreground">
-            Start Your Journey to be a link to subscription page
-          </p>
         </div>
       </section>
 
@@ -258,10 +271,10 @@ export default function Landing() {
           Miles Ahead.
         </p>
         <div className="mt-6 flex items-center justify-center gap-3">
-          <Link className="btn" href="/trip">
-            Get Started{" "}
-          </Link>
-          <Link className="navlin" href="/signi">
+          <button className="btn" onClick={handleStartJourney}>
+            Get Started
+          </button>
+          <Link className="navlink" href="/signin">
             Sign in
           </Link>
         </div>
