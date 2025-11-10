@@ -1,20 +1,169 @@
-// Basic rules for development. Tighten before production.
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    function isOwner(resourceOwnerId) { return isSignedIn() && request.auth.uid == resourceOwnerId; }
 
-    match /users/{uid} {
-      allow read, write: if isOwner(uid);
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function isIsoDate(s) {
+      return s is string && s.size() == 10 && s.matches('^\\d{4}-\\d{2}-\\d{2}$');
     }
 
+    /* -------- users -------- */
+    match /users/{uid} {
+      allow create: if isOwner(uid) && request.resource.data.username is string;
+      allow read, update, delete: if isOwner(uid);
+    }
+
+    /* -------- trips -------- */
     match /trips/{tripId} {
-      allow create: if isSignedIn();
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      function validTripCreate() {
+        return request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.name is string && request.resource.data.name.size() > 0
+          && isIsoDate(request.resource.data.startDate)
+          && isIsoDate(request.resource.data.endDate)
+          && request.resource.data.startDate <= request.resource.data.endDate
+          && request.resource.data.country is string && request.resource.data.country.size() > 0
+          && request.resource.data.transportationType is string
+          && request.resource.data.accommodationType is string
+          && request.resource.data.createdAt is number
+          && request.resource.data.updatedAt is number;
+      }
+
+      function validTripUpdate() {
+        return request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt is number
+          && request.resource.data.updatedAt > resource.data.updatedAt
+          && request.resource.data.name is string
+          && isIsoDate(request.resource.data.startDate)
+          && isIsoDate(request.resource.data.endDate)
+          && request.resource.data.startDate <= request.resource.data.endDate
+          && request.resource.data.country is string
+          && request.resource.data.transportationType is string
+          && request.resource.data.accommodationType is string;
+      }
+
+      allow create: if signedIn() && validTripCreate();
+      // Public read for share links
+      allow read:   if true;
+      allow update: if isOwner(resource.data.ownerId) && validTripUpdate();
+      allow delete: if isOwner(resource.data.ownerId);
+
+      /* ---- media subcollection ---- */
       match /media/{mediaId} {
-        allow create: if isSignedIn();
-        allow read, update, delete: if isOwner(resource.data.ownerId);
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validMediaCreate() {
+          return (request.resource.data.type == "image" || request.resource.data.type == "video")
+            && request.resource.data.downloadURL is string
+            && request.resource.data.createdAt is number
+            && (!('caption' in request.resource.data) || request.resource.data.caption is string)
+            && (!('fileName' in request.resource.data) || request.resource.data.fileName is string)
+            && (!('size' in request.resource.data) || request.resource.data.size is number)
+            && (!('contentType' in request.resource.data) || request.resource.data.contentType is string)
+            && (!('linkedSubcollection' in request.resource.data) || request.resource.data.linkedSubcollection is string)
+            && (!('linkedId' in request.resource.data) || request.resource.data.linkedId is string);
+        }
+
+        function validMediaUpdate() {
+          return request.resource.data.type == resource.data.type
+            && request.resource.data.downloadURL == resource.data.downloadURL
+            && request.resource.data.createdAt == resource.data.createdAt
+            && (!('caption' in request.resource.data) || request.resource.data.caption is string);
+        }
+
+        allow create: if isOwner(parentOwner()) && validMediaCreate();
+        // Public read for share links
+        allow read:   if true;
+        allow update: if isOwner(parentOwner()) && validMediaUpdate();
+        allow delete: if isOwner(parentOwner());
+      }
+
+      /* ---- destinations subcollection ---- */
+      match /destinations/{destId} {
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validSubitemData() {
+          return request.resource.data.name is string && request.resource.data.name.size() > 0
+            && request.resource.data.city is string
+            && request.resource.data.country is string && request.resource.data.country.size() > 0
+            && request.resource.data.createdAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        allow create: if isOwner(parentOwner()) && validSubitemData();
+        // Public read for share links
+        allow read:   if true;
+        allow update: if isOwner(parentOwner()) && validSubitemData();
+        allow delete: if isOwner(parentOwner());
+      }
+
+      /* ---- activities subcollection ---- */
+      match /activities/{actId} {
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validSubitemData() {
+          return request.resource.data.name is string && request.resource.data.name.size() > 0
+            && request.resource.data.city is string
+            && request.resource.data.country is string && request.resource.data.country.size() > 0
+            && request.resource.data.createdAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        allow create: if isOwner(parentOwner()) && validSubitemData();
+        // Public read for share links
+        allow read:   if true;
+        allow update: if isOwner(parentOwner()) && validSubitemData();
+        allow delete: if isOwner(parentOwner());
+      }
+
+      /* ---- accommodations subcollection ---- */
+      match /accommodations/{accId} {
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validSubitemData() {
+          return request.resource.data.name is string && request.resource.data.name.size() > 0
+            && request.resource.data.city is string
+            && request.resource.data.country is string && request.resource.data.country.size() > 0
+            && request.resource.data.createdAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        allow create: if isOwner(parentOwner()) && validSubitemData();
+        // Public read for share links
+        allow read:   if true;
+        allow update: if isOwner(parentOwner()) && validSubitemData();
+        allow delete: if isOwner(parentOwner());
+      }
+
+      /* ---- restaurants subcollection ---- */
+      match /restaurants/{restId} {
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validSubitemData() {
+          return request.resource.data.name is string && request.resource.data.name.size() > 0
+            && request.resource.data.city is string
+            && request.resource.data.country is string && request.resource.data.country.size() > 0
+            && request.resource.data.createdAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        allow create: if isOwner(parentOwner()) && validSubitemData();
+        // Public read for share links
+        allow read:   if true;
+        allow update: if isOwner(parentOwner()) && validSubitemData();
+        allow delete: if isOwner(parentOwner());
       }
     }
   }

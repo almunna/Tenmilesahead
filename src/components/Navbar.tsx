@@ -43,6 +43,10 @@ export default function Navbar() {
           <Link className="navlink" href="/trips">
             Trips
           </Link>
+          <Link className="navlink" href="/reviews">
+            Global Reviews
+          </Link>
+
           <Link className="navlink" href="/faqs">
             FAQs
           </Link>
@@ -142,6 +146,10 @@ export default function Navbar() {
               <Link className="navlink" href="/trips">
                 Trips
               </Link>
+              <Link className="navlink" href="/reviews">
+                Global Reviews
+              </Link>
+
               <Link className="navlink" href="/faqs">
                 FAQs
               </Link>

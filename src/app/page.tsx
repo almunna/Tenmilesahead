@@ -1,10 +1,34 @@
 // app/page.tsx
 "use client";
-import Link from "next/link";
-import { useAuth } from "@/components/AuthProvider";
-import { useRouter } from "next/navigation";
 
-/** --- FAQ DATA --- */
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import Protected from "@/components/Protected";
+import { useAuth } from "@/components/AuthProvider";
+import Flipbook from "@/components/Flipbook";
+
+import {
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  where,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import type { Trip, MediaItem } from "@/lib/types";
+
+import MyTrips from "@/components/MyTrips";
+import WorldMap from "@/components/WorldMap";
+import TravelOverview from "@/components/TravelOverview";
+
+/* ============================== LANDING (logged out) ============================== */
+
 const faqs = [
   {
     q: "What is Ten Miles Ahead?",
@@ -32,7 +56,6 @@ const faqs = [
   },
 ];
 
-/** --- FEATURE DATA (8 tiles like the SS) --- */
 const features = [
   {
     title: "Smart Trip Management",
@@ -88,22 +111,17 @@ const features = [
   },
 ];
 
-export default function Landing() {
+function Landing() {
   const { user } = useAuth();
   const router = useRouter();
 
   const handleStartJourney = () => {
-    if (user) {
-      router.push("/trips");
-    } else {
-      router.push("/signin");
-    }
+    if (user) router.push("/");
+    else router.push("/signin?redirect=/");
   };
 
   return (
-    // make page content sit above the decorative site-bg layers
     <main className="bg-background relative z-10">
-      {/* ————————— HERO ————————— */}
       <section className="py-12 md:py-16 bg-surface/50">
         <div className="mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight">
@@ -119,7 +137,6 @@ export default function Landing() {
               Start Your Journey!
             </button>
             <div className="flex items-center gap-3">
-              {/* Replace with real store badge images/links when ready */}
               <a
                 className="btn"
                 href="/subscrib"
@@ -139,7 +156,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ————————— FEATURE GRID (like SS with many tiles) ————————— */}
       <section className="container py-10">
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Everything You Need to Manage Your Trips
@@ -148,7 +164,6 @@ export default function Landing() {
           Effortlessly document all your journeys, from weekend getaways to epic
           adventures across the globe.
         </p>
-
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {features.map((f, i) => (
             <FeatureCard key={i} title={f.title} bullets={f.bullets} />
@@ -156,7 +171,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ————————— VALUE STRIP (gradient band with 3 points) ————————— */}
       <section className="py-12">
         <div className="container">
           <div className="card bg-gradient-to-br from-primary/15 to-primary/5 text-center">
@@ -181,7 +195,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ————————— PRICING (two cards; annual highlighted) ————————— */}
       <section className="container py-12">
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Simple, Affordable Pricing
@@ -189,7 +202,6 @@ export default function Landing() {
         <p className="text-center text-muted-foreground mt-2">
           Choose the plan that works for you
         </p>
-
         <div className="mt-8 grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
           <PricingCard
             label="Monthly Plan"
@@ -223,13 +235,11 @@ export default function Landing() {
             cta={{ href: "/subscribe", text: "Choose Annual" }}
           />
         </div>
-
         <p className="text-center text-xs text-muted-foreground mt-3">
           Launch pricing — secure your rate.
         </p>
       </section>
 
-      {/* ————————— FAQ (accordion list like SS) ————————— */}
       <section className="container py-12">
         <h2 className="text-center text-2xl md:text-3xl font-bold">
           Frequently Asked Questions
@@ -237,7 +247,6 @@ export default function Landing() {
         <p className="text-center text-muted-foreground mt-2">
           Get answers to common questions
         </p>
-
         <div className="mt-6 space-y-3 max-w-3xl mx-auto">
           {faqs.map((f, i) => (
             <details key={i} className="card">
@@ -261,7 +270,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ————————— FINAL CTA (footer-like) ————————— */}
       <section className="container py-12 text-center">
         <h2 className="text-2xl md:text-3xl font-bold">
           Ready to Transform Your Travel Journal?
@@ -286,13 +294,10 @@ export default function Landing() {
   );
 }
 
-/** ——— Helpers ——— */
-
 function FeatureCard({ title, bullets }: { title: string; bullets: string[] }) {
   return (
     <div className="card">
       <div className="flex items-start gap-3">
-        {/* Icon placeholder (keeps your palette) */}
         <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
           <div className="w-3 h-3 rounded-full bg-primary/80" />
         </div>
@@ -358,9 +363,7 @@ function PricingCard({
         <div className="text-3xl font-bold">{price}</div>
         <div className="text-muted-foreground mb-1">{period}</div>
       </div>
-      {savings && (
-        <div className="text-sm text-primary/80 mt-1">{savings}</div>
-      )}
+      {savings && <div className="text-sm text-primary/80 mt-1">{savings}</div>}
 
       <ul className="mt-4 space-y-2 text-muted-foreground text-sm">
         {bullets.map((b, i) => (
@@ -371,10 +374,211 @@ function PricingCard({
         ))}
       </ul>
 
-      {/* Make both buttons identical (remove highlight-based width) */}
       <Link href={cta.href} className="btn mt-6">
         {cta.text}
       </Link>
     </div>
+  );
+}
+
+/* ============================== DASHBOARD (logged in) ============================== */
+
+type WithId<T> = T & { id: string };
+
+function HomeDashboard() {
+  return (
+    <Protected>
+      <HomeInner />
+    </Protected>
+  );
+}
+
+export default function Page() {
+  const { user } = useAuth();
+  return user ? <HomeDashboard /> : <Landing />;
+}
+
+function fmtMDY(s?: string | number | null) {
+  if (!s) return "";
+  if (typeof s === "string") {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) return `${m[2]}/${m[3]}/${m[1]}`;
+  }
+  const d = new Date(s as number);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(
+    d.getDate()
+  ).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function HomeInner() {
+  const { user } = useAuth();
+
+  // Display name editor (unchanged)
+  const [username, setUsername] = useState("");
+  const [usernameSaving, setUsernameSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const uref = doc(db, "users", user.uid);
+    const unsub = onSnapshot(uref, (snap) => {
+      const d = snap.data() as any;
+      setUsername(d?.username || "");
+    });
+    return () => unsub();
+  }, [user]);
+
+  async function saveUsername() {
+    if (!user || !username.trim()) return;
+    setUsernameSaving(true);
+    try {
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          uid: user.uid,
+          email: user.email || null,
+          username: username.trim(),
+          updatedAt: Date.now(),
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } finally {
+      setUsernameSaving(false);
+    }
+  }
+
+  // Trips (unchanged subscription)
+  const [trips, setTrips] = useState<WithId<Trip>[]>([]);
+  useEffect(() => {
+    if (!user) return;
+    const qTrips = query(
+      collection(db, "trips"),
+      where("ownerId", "==", user.uid),
+      orderBy("startDate", "desc")
+    );
+    const unsub = onSnapshot(qTrips, (snap) => {
+      const arr: WithId<Trip>[] = [];
+      snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+      setTrips(arr);
+    });
+    return () => unsub();
+  }, [user]);
+
+  // Aggregates for TravelOverview (unchanged logic)
+  const [photoCount, setPhotoCount] = useState(0);
+  const [visitedCountries, setVisitedCountries] = useState<string[]>([]);
+  const [visitedStates, setVisitedStates] = useState<string[]>([]);
+  const [visitedCities, setVisitedCities] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const tSnap = await getDocs(
+        query(collection(db, "trips"), where("ownerId", "==", user.uid))
+      );
+
+      const cSet = new Set<string>();
+      const sSet = new Set<string>();
+      const citySet = new Set<string>();
+      let imgTotal = 0;
+
+      for (const docSnap of tSnap.docs) {
+        const t = docSnap.data() as Trip;
+        if (t.country) cSet.add(t.country);
+        if (t.state) sSet.add(t.state);
+        if (t.city) citySet.add(`${t.city}|${t.country || ""}`);
+
+        const destSnap = await getDocs(
+          collection(db, "trips", docSnap.id, "destinations")
+        );
+        destSnap.forEach((d) => {
+          const x = d.data() as any;
+          if (x.country) cSet.add(x.country);
+          if (x.state) sSet.add(x.state);
+          if (x.city) citySet.add(`${x.city}|${x.country || ""}`);
+        });
+
+        const mediaSnap = await getDocs(
+          collection(db, "trips", docSnap.id, "media")
+        );
+        mediaSnap.forEach((m) => {
+          const mm = m.data() as MediaItem;
+          if (mm.type === "image") imgTotal += 1;
+        });
+      }
+
+      setVisitedCountries(Array.from(cSet));
+      setVisitedStates(Array.from(sSet));
+      setVisitedCities(Array.from(citySet).map((s) => s.split("|")[0]));
+      setPhotoCount(imgTotal);
+    })();
+  }, [user, trips.length]);
+
+  // Flipbook modal control
+  const [flipTripId, setFlipTripId] = useState<string | null>(null);
+
+  return (
+    <main className="bg-background min-h-dvh">
+      <div className="container py-6 space-y-10">
+        {/* Username editor */}
+        <section className="card">
+          <h2 className="text-xl font-semibold">Your Display Name</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            This name is shown on your reviews. (Required)
+          </p>
+          <div className="mt-4 flex flex-col sm:flex-row gap-3">
+            <input
+              className="input flex-1"
+              placeholder="e.g., Williams’ Family Adventures"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            <button
+              className="btn"
+              onClick={saveUsername}
+              disabled={!username.trim() || usernameSaving}
+            >
+              {usernameSaving ? "Saving..." : "Save Name"}
+            </button>
+          </div>
+        </section>
+
+        {/* My Trips (moved to component) */}
+        <MyTrips trips={trips} onOpenFlip={(id) => setFlipTripId(id)} />
+
+        {/* World Map (moved to component) */}
+        <WorldMap trips={trips} onOpenFlip={(id) => setFlipTripId(id)} />
+
+        {/* Travel Overview (moved to component) */}
+        <TravelOverview
+          photoCount={photoCount}
+          visitedCountries={visitedCountries}
+          visitedStates={visitedStates}
+          visitedCities={visitedCities}
+        />
+      </div>
+
+      {/* Flipbook modal (unchanged) */}
+      {flipTripId && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
+          <div className="relative w-[95vw] h-[92vh] bg-background rounded-xl overflow-hidden">
+            <button
+              className="absolute top-2 right-2 z-10 btn"
+              onClick={() => setFlipTripId(null)}
+            >
+              Close
+            </button>
+            <div className="w-full h-full">
+              <Flipbook
+                tripId={flipTripId}
+                open={true}
+                onClose={() => setFlipTripId(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
