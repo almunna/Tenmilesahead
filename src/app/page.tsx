@@ -121,7 +121,7 @@ function Landing() {
   };
 
   return (
-    <main className="bg-background relative z-10">
+    <main className="relative z-10">
       <section className="py-12 md:py-16 bg-surface/50">
         <div className="mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight">
@@ -518,7 +518,7 @@ function HomeInner() {
   const [flipTripId, setFlipTripId] = useState<string | null>(null);
 
   return (
-    <main className="bg-background min-h-dvh">
+    <main className="min-h-dvh relative z-10">
       <div className="container py-6 space-y-10">
         {/* Username editor */}
         <section className="card">
@@ -545,7 +545,7 @@ function HomeInner() {
         </section>
 
         {/* My Trips (moved to component) */}
-        <MyTrips trips={trips} onOpenFlip={(id) => setFlipTripId(id)} />
+        <MyTrips trips={trips} />
 
         {/* World Map (moved to component) */}
         <WorldMap trips={trips} onOpenFlip={(id) => setFlipTripId(id)} />

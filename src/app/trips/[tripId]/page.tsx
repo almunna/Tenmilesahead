@@ -1,4 +1,4 @@
-// File: app/trips/[tripId]/page.tsx (or wherever your TripPage lives)
+// File: app/trips/[tripId]/page.tsx
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,26 +17,30 @@ import { useAuth } from "@/components/AuthProvider";
 import Protected from "@/components/Protected";
 import Uploader from "@/components/Uploader";
 import Flipbook from "@/components/Flipbook";
-import EditTripModal from "@/components/EditTripModal"; // ✅ use the shared component
+import EditTripModal from "@/components/EditTripModal";
 import Link from "next/link";
 
 /* Helpers */
 function fmtMDY(s: string | undefined | null) {
   if (!s) return "";
-
-  // Convert to string if needed (in case Firestore returns an object)
   const str = typeof s === "string" ? s : String(s);
 
-  // Handle "yyyy-mm-dd" format (ISO date string)
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
   if (m) return `${m[2]}/${m[3]}/${m[1]}`;
 
-  // Handle "mm/dd/yyyy" format (already formatted)
   const m2 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(str);
   if (m2) return str;
 
-  // If it's already in some other format, just return it
   return str;
+}
+
+function getMillis(t: any): number {
+  if (!t) return 0;
+  if (typeof t === "number") return t;
+  if (typeof t === "object" && typeof t.seconds === "number") {
+    return t.seconds * 1000 + (t.nanoseconds ? t.nanoseconds / 1e6 : 0);
+  }
+  return 0;
 }
 
 /** Auto-size helper for textareas (shows full caption immediately) */
@@ -45,6 +49,25 @@ function autoSizeTextarea(el: HTMLTextAreaElement | null) {
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
 }
+
+type WithId<T> = T & { id: string };
+
+type SimplePlace = {
+  id?: string;
+  name: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country: string;
+  price?: number | null;
+  priceUnit?: string | null;
+  address?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+  // optional extras (transportationType/accommodationType, etc.)
+  [key: string]: any;
+};
 
 export default function TripPage() {
   return (
@@ -63,7 +86,7 @@ function TripInner() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [openFlip, setOpenFlip] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false); // ← uses shared modal
+  const [openEdit, setOpenEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // cover position state (percent, 0–100; default 50 = center)
@@ -74,11 +97,31 @@ function TripInner() {
   const [showUploader, setShowUploader] = useState(true);
   const prevMediaCount = useRef<number>(0);
 
+  // ---- NEW: Subcollections for itinerary & lists ----
+  const [destinations, setDestinations] = useState<WithId<SimplePlace>[]>([]);
+  const [activities, setActivities] = useState<WithId<SimplePlace>[]>([]);
+  const [accommodations, setAccommodations] = useState<WithId<SimplePlace>[]>(
+    []
+  );
+  const [restaurants, setRestaurants] = useState<WithId<SimplePlace>[]>([]);
+
+  const [selectedItem, setSelectedItem] = useState<{
+    id: string;
+    name: string;
+    subcollection:
+      | "destinations"
+      | "activities"
+      | "accommodations"
+      | "restaurants";
+  } | null>(null);
+  // ---- END NEW ----
+
   // Derived helpers
   const coverMedia = useMemo(
     () => (trip ? media.find((m) => m.id === trip.coverMediaId) : undefined),
     [media, trip]
   );
+
   const locationStr = useMemo(() => {
     if (!trip) return "";
     const cityState = trip.city
@@ -137,12 +180,12 @@ function TripInner() {
   useEffect(() => {
     if (!tripId || !user) return;
 
-    const q = query(
+    const qx = query(
       collection(db, "trips", tripId, "media"),
       orderBy("createdAt", "desc")
     );
     const unsub = onSnapshot(
-      q,
+      qx,
       (snap) => {
         const arr: MediaItem[] = [];
         snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
@@ -211,14 +254,6 @@ function TripInner() {
   // cover first, then latest-first
   const sortedMedia = useMemo(() => {
     const coverId = trip?.coverMediaId;
-    const getMillis = (t: any) => {
-      if (!t) return 0;
-      if (typeof t === "number") return t;
-      if (typeof t === "object" && typeof t.seconds === "number") {
-        return t.seconds * 1000 + (t.nanoseconds ? t.nanoseconds / 1e6 : 0);
-      }
-      return 0;
-    };
     const arr = media.slice();
     arr.sort((a, b) => {
       if (coverId) {
@@ -229,6 +264,100 @@ function TripInner() {
     });
     return arr;
   }, [media, trip?.coverMediaId]);
+
+  // ---- NEW: Live subscriptions for each place subcollection ----
+  useEffect(() => {
+    if (!tripId || !user) return;
+    const unsubDest = onSnapshot(
+      query(
+        collection(db, "trips", tripId, "destinations"),
+        orderBy("createdAt", "desc")
+      ),
+      (snap) => {
+        const arr: WithId<SimplePlace>[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setDestinations(arr);
+      }
+    );
+    const unsubActs = onSnapshot(
+      query(
+        collection(db, "trips", tripId, "activities"),
+        orderBy("createdAt", "desc")
+      ),
+      (snap) => {
+        const arr: WithId<SimplePlace>[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setActivities(arr);
+      }
+    );
+    const unsubAcc = onSnapshot(
+      query(
+        collection(db, "trips", tripId, "accommodations"),
+        orderBy("createdAt", "desc")
+      ),
+      (snap) => {
+        const arr: WithId<SimplePlace>[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setAccommodations(arr);
+      }
+    );
+    const unsubRes = onSnapshot(
+      query(
+        collection(db, "trips", tripId, "restaurants"),
+        orderBy("createdAt", "desc")
+      ),
+      (snap) => {
+        const arr: WithId<SimplePlace>[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setRestaurants(arr);
+      }
+    );
+
+    return () => {
+      unsubDest();
+      unsubActs();
+      unsubAcc();
+      unsubRes();
+    };
+  }, [tripId, user]);
+
+  const itineraryRows = useMemo(() => {
+    const rows: Array<{
+      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant";
+      subcollection:
+        | "destinations"
+        | "activities"
+        | "accommodations"
+        | "restaurants";
+      data: WithId<SimplePlace>;
+    }> = [];
+
+    destinations.forEach((d) =>
+      rows.push({ kind: "Destination", subcollection: "destinations", data: d })
+    );
+    activities.forEach((d) =>
+      rows.push({ kind: "Activity", subcollection: "activities", data: d })
+    );
+    accommodations.forEach((d) =>
+      rows.push({
+        kind: "Accommodation",
+        subcollection: "accommodations",
+        data: d,
+      })
+    );
+    restaurants.forEach((d) =>
+      rows.push({ kind: "Restaurant", subcollection: "restaurants", data: d })
+    );
+
+    rows.sort((a, b) => {
+      const sa = a.data.startDate ? new Date(a.data.startDate).getTime() : 0;
+      const sb = b.data.startDate ? new Date(b.data.startDate).getTime() : 0;
+      return sa - sb;
+    });
+
+    return rows;
+  }, [destinations, activities, accommodations, restaurants]);
+  // ---- END NEW ----
 
   return (
     <div className="container py-8 space-y-6">
@@ -362,11 +491,11 @@ function TripInner() {
         </div>
       )}
 
-      {/* Media grid */}
+      {/* Photos (renamed from Media) */}
       {!error && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Media</h2>
+            <h2 className="text-xl font-semibold">Photos</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedMedia.map((m) => (
@@ -429,7 +558,260 @@ function TripInner() {
         </div>
       )}
 
-      {/* Flipbook */}
+      {/* ---- NEW: Itinerary (chronological) ---- */}
+      {!error && (
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-3">Itinerary</h2>
+          <div className="rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-surface">
+                <tr>
+                  <th className="px-3 py-2 text-left">Type</th>
+                  <th className="px-3 py-2 text-left">Name</th>
+                  <th className="px-3 py-2 text-left">Dates</th>
+                  <th className="px-3 py-2 text-left">Location</th>
+                  <th className="px-3 py-2 text-left">Price</th>
+                  <th className="px-3 py-2 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itineraryRows.map((row, i) => {
+                  const d = row.data;
+                  const loc = [d.address, d.city, d.state, d.country]
+                    .filter(Boolean)
+                    .join(", ");
+                  return (
+                    <tr
+                      key={i}
+                      className="border-t border-border hover:bg-surface/50"
+                    >
+                      <td className="px-3 py-2">{row.kind}</td>
+                      <td className="px-3 py-2">{d.name || "—"}</td>
+                      <td className="px-3 py-2">
+                        {fmtMDY(d.startDate)}
+                        {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                      </td>
+                      <td className="px-3 py-2">{loc || "—"}</td>
+                      <td className="px-3 py-2">
+                        {d.price != null
+                          ? `${d.price} ${d.priceUnit || ""}`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          className="text-xs navlink"
+                          onClick={() =>
+                            setSelectedItem({
+                              id: d.id!,
+                              name: d.name,
+                              subcollection: row.subcollection,
+                            })
+                          }
+                        >
+                          View Photos
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {itineraryRows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-3 py-4 text-center text-muted-foreground"
+                    >
+                      No entries yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {/* ---- END NEW: Itinerary ---- */}
+
+      {/* ---- NEW: Destinations list ---- */}
+      {!error && (
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-2">Destinations</h2>
+          <div className="space-y-2">
+            {destinations.map((r) => (
+              <div key={r.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-sm flex-1">
+                    <div className="font-medium">{r.name}</div>
+                    <div className="text-muted-foreground">
+                      {fmtMDY(r.startDate)}
+                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
+                      {[r.address, r.city, r.state, r.country]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                      {r.price != null
+                        ? ` • ${r.price} ${r.priceUnit || ""}`
+                        : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-sm navlink"
+                      onClick={() =>
+                        setSelectedItem({
+                          id: r.id!,
+                          name: r.name,
+                          subcollection: "destinations",
+                        })
+                      }
+                    >
+                      View Photos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {destinations.length === 0 && (
+              <div className="text-sm text-muted-foreground">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- NEW: Activities list ---- */}
+      {!error && (
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-2">Activities</h2>
+          <div className="space-y-2">
+            {activities.map((r) => (
+              <div key={r.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-sm flex-1">
+                    <div className="font-medium">{r.name}</div>
+                    <div className="text-muted-foreground">
+                      {fmtMDY(r.startDate)}
+                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
+                      {[r.address, r.city, r.state, r.country]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                      {r.price != null
+                        ? ` • ${r.price} ${r.priceUnit || ""}`
+                        : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-sm navlink"
+                      onClick={() =>
+                        setSelectedItem({
+                          id: r.id!,
+                          name: r.name,
+                          subcollection: "activities",
+                        })
+                      }
+                    >
+                      View Photos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {activities.length === 0 && (
+              <div className="text-sm text-muted-foreground">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- NEW: Accommodations list ---- */}
+      {!error && (
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-2">Accommodations</h2>
+          <div className="space-y-2">
+            {accommodations.map((r) => (
+              <div key={r.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-sm flex-1">
+                    <div className="font-medium">{r.name}</div>
+                    <div className="text-muted-foreground">
+                      {fmtMDY(r.startDate)}
+                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
+                      {[r.address, r.city, r.state, r.country]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                      {r.price != null
+                        ? ` • ${r.price} ${r.priceUnit || ""}`
+                        : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-sm navlink"
+                      onClick={() =>
+                        setSelectedItem({
+                          id: r.id!,
+                          name: r.name,
+                          subcollection: "accommodations",
+                        })
+                      }
+                    >
+                      View Photos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {accommodations.length === 0 && (
+              <div className="text-sm text-muted-foreground">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- NEW: Restaurants list ---- */}
+      {!error && (
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-2">Restaurants</h2>
+          <div className="space-y-2">
+            {restaurants.map((r) => (
+              <div key={r.id} className="rounded-xl border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-sm flex-1">
+                    <div className="font-medium">{r.name}</div>
+                    <div className="text-muted-foreground">
+                      {fmtMDY(r.startDate)}
+                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
+                      {[r.address, r.city, r.state, r.country]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                      {r.price != null
+                        ? ` • ${r.price} ${r.priceUnit || ""}`
+                        : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-sm navlink"
+                      onClick={() =>
+                        setSelectedItem({
+                          id: r.id!,
+                          name: r.name,
+                          subcollection: "restaurants",
+                        })
+                      }
+                    >
+                      View Photos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {restaurants.length === 0 && (
+              <div className="text-sm text-muted-foreground">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Flipbook (all media) */}
       <Flipbook
         tripId={tripId}
         open={openFlip}
@@ -439,6 +821,139 @@ function TripInner() {
       {/* Shared Edit Modal */}
       {openEdit && trip && (
         <EditTripModal trip={trip} onClose={() => setOpenEdit(false)} />
+      )}
+
+      {/* ---- NEW: Item-level Flipbook for a specific itinerary entry ---- */}
+      {selectedItem && (
+        <ItemFlipbook
+          tripId={tripId}
+          linkedId={selectedItem.id}
+          subcollection={selectedItem.subcollection}
+          itemName={selectedItem.name}
+          onClose={() => setSelectedItem(null)}
+        />
+      )}
+      {/* ---- END NEW ---- */}
+    </div>
+  );
+}
+
+/* ---------- NEW: Item-level Flipbook (per-entry) ---------- */
+function ItemFlipbook({
+  tripId,
+  linkedId,
+  subcollection,
+  itemName,
+  onClose,
+}: {
+  tripId: string;
+  linkedId: string;
+  subcollection:
+    | "destinations"
+    | "activities"
+    | "accommodations"
+    | "restaurants";
+  itemName: string;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<MediaItem[]>([]);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const qx = query(
+      collection(db, "trips", tripId, "media"),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(qx, (snap) => {
+      const arr: MediaItem[] = [];
+      snap.forEach((docu) => {
+        const data = docu.data() as any;
+        if (
+          data.linkedId === linkedId &&
+          data.linkedSubcollection === subcollection
+        ) {
+          arr.push({ id: docu.id, ...data });
+        }
+      });
+      setItems(arr);
+      if (index >= arr.length) setIndex(0);
+    });
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId, linkedId, subcollection]);
+
+  const prev = () => setIndex((i) => (i - 1 + items.length) % items.length);
+  const next = () => setIndex((i) => (i + 1) % items.length);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col">
+      <div className="flex items-center justify-between px-4 py-3 text-white">
+        <div className="text-sm">
+          {itemName} — {items.length} item{items.length === 1 ? "" : "s"}
+        </div>
+        <button
+          className="rounded-lg px-3 py-1 bg-white/10 hover:bg-white/20"
+          onClick={onClose}
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+        {items.length === 0 ? (
+          <div className="text-white/80">No media for this item yet</div>
+        ) : (
+          <div className="w-full h-full max-w-5xl flex items-center justify-center">
+            {items[index].type === "image" ? (
+              <img
+                src={items[index].downloadURL}
+                className="max-h-[80vh] max-w-full rounded-xl"
+                alt={items[index].caption || ""}
+                draggable={false}
+              />
+            ) : (
+              <video
+                src={items[index].downloadURL}
+                className="max-h-[80vh] max-w-full rounded-xl"
+                controls
+              />
+            )}
+          </div>
+        )}
+
+        {items.length > 1 && (
+          <>
+            <button
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2"
+              onClick={prev}
+            >
+              ◀
+            </button>
+            <button
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2"
+              onClick={next}
+            >
+              ▶
+            </button>
+          </>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <div className="px-4 py-3 text-center text-white/80 text-sm">
+          {items[index].caption || ""}
+        </div>
       )}
     </div>
   );

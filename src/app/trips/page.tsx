@@ -82,6 +82,9 @@ export default function TripsPage() {
 function TripsInner() {
   const { user } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [tripsLoaded, setTripsLoaded] = useState(false);
+  const [shouldLoadTrips, setShouldLoadTrips] = useState(false); // ← defer trips subscription
+
   const [form, setForm] = useState({
     name: "",
     city: "",
@@ -193,8 +196,29 @@ function TripsInner() {
     );
   }, [form]);
 
+  // Defer subscribing to trips until after first paint / browser idle
   useEffect(() => {
-    if (!user) return;
+    let timeoutId: any = null;
+    let idleId: any = null;
+    const enable = () => setShouldLoadTrips(true);
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = (window as any).requestIdleCallback(enable, { timeout: 700 });
+    } else {
+      timeoutId = setTimeout(enable, 200);
+    }
+
+    return () => {
+      if (idleId && (window as any).cancelIdleCallback) {
+        (window as any).cancelIdleCallback(idleId);
+      }
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // Subscribe to trips only when we decided to load them
+  useEffect(() => {
+    if (!user || !shouldLoadTrips) return;
 
     const q = query(
       collection(db, "trips"),
@@ -202,14 +226,19 @@ function TripsInner() {
       orderBy("createdAt", "asc")
     );
 
-    const unsub = onSnapshot(q, (snap) => {
-      const arr: Trip[] = [];
-      snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
-      setTrips(arr);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const arr: Trip[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setTrips(arr);
+        setTripsLoaded(true);
+      },
+      () => setTripsLoaded(true) // still mark as finished to hide skeleton
+    );
 
     return () => unsub();
-  }, [user]);
+  }, [user, shouldLoadTrips]);
 
   async function createTrip(e: React.FormEvent) {
     e.preventDefault();
@@ -236,7 +265,6 @@ function TripsInner() {
     // 1) Create the trip
     const tripRef = await addDoc(collection(db, "trips"), payload as any);
 
-    // 2) Upload selected media (use captions + chosen cover)
     // 2) Upload selected media (use captions + chosen cover)
     const allFiles = [...selectedFiles];
     if (allFiles.length > 0) {
@@ -273,7 +301,7 @@ function TripsInner() {
             downloadURL, // REQUIRED by rules
             createdAt: Date.now(), // REQUIRED by rules
             caption: captions[k] || "", // optional
-            fileName: file.name, // optional (kept for convenience)
+            fileName: file.name, // optional
             size: file.size, // optional
             contentType: file.type, // optional
           } as any);
@@ -650,109 +678,185 @@ function TripsInner() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Your Trips</h2>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {trips.map((t) => (
-            <div key={t.id} className="card overflow-hidden relative">
-              {/* ⋯ menu trigger */}
-              <div className="absolute top-2 right-2 z-10">
-                <button
-                  type="button"
-                  className="h-8 w-8 rounded-full bg-surface/90 border border-border flex items-center justify-center text-muted-foreground hover:bg-surface"
-                  aria-label="More actions"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpenId((prev) =>
-                      prev === t.id ? null : t.id || null
-                    );
-                  }}
-                >
-                  ⋯
-                </button>
+        {/* Skeleton / placeholder while trips subscription is deferred or loading */}
+        {!shouldLoadTrips || !tripsLoaded ? (
+          <div
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            aria-busy="true"
+          >
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="rounded-2xl bg-[#2a3544] overflow-hidden animate-pulse"
+              >
+                <div className="aspect-[16/9] w-full bg-white/10" />
+                <div className="p-4 space-y-3">
+                  <div className="h-4 w-2/3 bg-white/10 rounded" />
+                  <div className="h-4 w-1/3 bg-white/10 rounded" />
+                  <div className="flex gap-2">
+                    <div className="h-9 w-24 bg-white/10 rounded-lg" />
+                    <div className="h-9 w-9 bg-white/10 rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {trips.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-2xl shadow-lg bg-[#2a3544]"
+                style={{ overflow: "visible" }}
+              >
+                {/* Cover with overlay content */}
+                <div className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden relative rounded-t-2xl">
+                  <CoverThumb tripId={t.id!} coverMediaId={t.coverMediaId} />
 
-                {menuOpenId === t.id && (
-                  <div
-                    className="absolute top-full right-0 mt-2 w-36 rounded-md border border-border bg-surface shadow-md text-sm"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  {/* Dark gradient overlay at bottom */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+
+                  {/* Trip info overlay on image - only title and location */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                    <h3 className="text-lg font-semibold mb-1 line-clamp-1">
+                      {t.name}
+                    </h3>
+
+                    {/* Location */}
+                    <div className="flex items-start gap-1.5">
+                      <svg
+                        className="w-4 h-4 mt-0.5 flex-shrink-0"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span className="text-sm">{locationOf(t)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content below image */}
+                <div className="p-4 space-y-3">
+                  {/* Date with calendar icon */}
+                  <div className="flex items-center gap-2 text-white/80">
+                    <svg
+                      className="w-4 h-4 flex-shrink-0"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-sm">{dateRangeOf(t)}</span>
+                  </div>
+
+                  {/* Bottom action bar with menu dropdown */}
+                  <div className="relative flex items-center gap-2">
+                    {/* Menu dropdown */}
+                    {menuOpenId === t.id && (
+                      <div className="absolute left-0 bottom-full mb-2 w-48 rounded-xl bg-[#3a4557] shadow-2xl overflow-hidden z-[100] border border-white/10">
+                        <div className="flex flex-col py-2">
+                          <button
+                            type="button"
+                            className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
+                            onClick={() => {
+                              setEditingTrip(t);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            </svg>
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="flex items-center gap-3 px-4 py-3 text-red-400 text-sm hover:bg-white/10 transition-colors text-left"
+                            onClick={() => deleteTrip(t.id!)}
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* View Trip button */}
+                    <Link
+                      className="flex items-center gap-2 px-4 py-2 bg-[#5eb9b3] hover:bg-[#4ea9a3] rounded-lg text-white text-sm font-medium transition-colors"
+                      href={`/trips/${t.id}`}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                        <path
+                          fillRule="evenodd"
+                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      View Trip
+                    </Link>
+
+                    {/* Menu button - toggles dropdown */}
                     <button
                       type="button"
-                      className="block w-full text-left px-3 py-2 hover:bg-haiti-800/5"
-                      onClick={() => {
-                        setEditingTrip(t);
-                        setMenuOpenId(null);
+                      className="h-9 w-9 rounded-lg bg-[#3a4557] hover:bg-[#4a5567] flex items-center justify-center text-white transition-colors"
+                      aria-label="Menu"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpenId((prev) =>
+                          prev === t.id ? null : t.id || null
+                        );
                       }}
                     >
-                      Edit
+                      <svg
+                        className="w-5 h-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
                     </button>
-                    <button
-                      type="button"
-                      className="block w-full text-left px-3 py-2 hover:bg-haiti-800/5 text-red-600"
-                      onClick={() => deleteTrip(t.id!)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Cover */}
-              <CoverThumb tripId={t.id!} coverMediaId={t.coverMediaId} />
-
-              <div
-                className="p-4 space-y-2"
-                onClick={() => setMenuOpenId(null)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="font-semibold text-base line-clamp-1">
-                    {t.name}
-                  </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5">
-                    {t.transportationType || "—"}
-                  </span>
-                </div>
-
-                <div className="text-sm text-muted-foreground">
-                  {locationOf(t)}
-                </div>
-                <div className="text-sm text-foreground">{dateRangeOf(t)}</div>
-
-                {t.accommodationType && (
-                  <div className="text-xs text-muted-foreground">
-                    Stay:{" "}
-                    <span className="px-2 py-0.5 rounded-full bg-haiti-800/5">
-                      {t.accommodationType}
-                    </span>
-                  </div>
-                )}
-
-                {t.specificAddress && (
-                  <div className="text-xs text-muted-foreground">
-                    Address: {t.specificAddress}
-                  </div>
-                )}
-
-                {t.description && (
-                  <p className="text-sm text-foreground line-clamp-3">
-                    {clip(t.description)}
-                  </p>
-                )}
-
-                <div className="pt-2 flex items-center justify-between">
-                  <Link className="btn" href={`/trips/${t.id}`}>
-                    Open
-                  </Link>
-                  <div className="text-xs text-muted-foreground">
-                    Created {fmt(t.createdAt)}
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {trips.length === 0 && (
-            <div className="text-muted-foreground">No trips yet.</div>
-          )}
-        </div>
+            {trips.length === 0 && (
+              <div className="text-muted-foreground">No trips yet.</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Edit modal */}
@@ -919,7 +1023,7 @@ function CoverThumb({
 
   if (!cover) {
     return (
-      <div className="aspect-[16/9] w-full bg-haiti-800/5 flex items-center justify-center text-muted-foreground text-xs">
+      <div className="w-full h-full flex items-center justify-center text-white/60 text-xs bg-gradient-to-b from-slate-800 to-slate-900">
         No cover yet
       </div>
     );
@@ -934,7 +1038,7 @@ function CoverThumb({
   return (
     <div
       ref={boxRef}
-      className="relative aspect-[16/9] w-full overflow-hidden bg-black/5 group"
+      className="absolute inset-0 w-full h-full bg-black/5 group"
       onMouseDown={startDrag}
       onMouseMove={moveDrag}
       onMouseUp={endDrag}
