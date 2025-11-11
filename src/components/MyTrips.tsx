@@ -45,7 +45,7 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
         <h2 className="text-xl font-semibold">My Trips</h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-foreground/80">From</label>
+            <label className="text-sm text-muted-foreground">From</label>
             <input
               type="date"
               className="input h-9"
@@ -54,7 +54,7 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-foreground/80">To</label>
+            <label className="text-sm text-muted-foreground">To</label>
             <input
               type="date"
               className="input h-9"
