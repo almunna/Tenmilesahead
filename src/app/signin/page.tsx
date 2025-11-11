@@ -16,7 +16,7 @@ export default function SignIn() {
     setError(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/trips");
+      router.push("/");
     } catch (err: any) {
       setError(err.message);
     }

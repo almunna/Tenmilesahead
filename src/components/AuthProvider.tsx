@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import type { UserProfile } from "../lib/types";
+import { useRouter } from "next/navigation";
 
 type Ctx = {
   user: User | null;
@@ -39,6 +40,7 @@ export default function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   // keep the latest profile unsubscribe so we can tear it down properly
   const profileUnsubRef = useRef<(() => void) | null>(null);
@@ -114,13 +116,21 @@ export default function AuthProvider({
     if (snap.exists()) setProfile(snap.data() as UserProfile);
   }
 
+  async function signOutNow() {
+    try {
+      await signOut(auth);
+    } finally {
+      router.replace("/signin");
+    }
+  }
+
   return (
     <AuthCtx.Provider
       value={{
         user,
         profile,
         loading,
-        signOutNow: () => signOut(auth),
+        signOutNow,
         refreshProfile,
       }}
     >

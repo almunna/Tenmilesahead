@@ -63,11 +63,181 @@ type SimplePlace = {
   price?: number | null;
   priceUnit?: string | null;
   address?: string | null;
+  phoneNumber?: string | null;
+  websiteUrl?: string | null;
+  notes?: string | null;
+  review?: string | null;
+  qualityRating?: number | null;
+  valueRating?: number | null;
+  serviceRating?: number | null;
+  locationRating?: number | null;
   createdAt?: number;
   updatedAt?: number;
   // optional extras (transportationType/accommodationType, etc.)
   [key: string]: any;
 };
+
+/** Reusable component to display a place with all its fields */
+function PlaceCard({
+  item,
+  subcollection,
+  onViewPhotos,
+}: {
+  item: WithId<SimplePlace>;
+  subcollection:
+    | "destinations"
+    | "activities"
+    | "accommodations"
+    | "restaurants";
+  onViewPhotos: () => void;
+}) {
+  const loc = [item.address, item.city, item.state, item.country]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <div className="rounded-xl border border-border p-4 space-y-3">
+      {/* Header: name + dates + location */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="font-semibold text-base">{item.name}</div>
+          <div className="text-sm text-muted-foreground">
+            {fmtMDY(item.startDate)}
+            {item.endDate ? ` → ${fmtMDY(item.endDate)}` : ""}
+            {loc && ` • ${loc}`}
+          </div>
+        </div>
+        <button className="text-sm navlink" onClick={onViewPhotos}>
+          View Photos
+        </button>
+      </div>
+
+      {/* Contact Info */}
+      {(item.phoneNumber || item.websiteUrl) && (
+        <div className="text-sm space-y-1">
+          {item.phoneNumber && (
+            <div className="flex gap-2">
+              <span className="text-muted-foreground">Phone:</span>
+              <span>{item.phoneNumber}</span>
+            </div>
+          )}
+          {item.websiteUrl && (
+            <div className="flex gap-2">
+              <span className="text-muted-foreground">Website:</span>
+              <a
+                href={item.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link"
+              >
+                {item.websiteUrl}
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Price */}
+      {item.price != null && (
+        <div className="text-sm">
+          <span className="text-muted-foreground">Price:</span> {item.price}{" "}
+          {item.priceUnit || ""}
+        </div>
+      )}
+
+      {/* Star Ratings */}
+      {(item.qualityRating != null ||
+        item.valueRating != null ||
+        item.serviceRating != null ||
+        item.locationRating != null) && (
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          {item.qualityRating != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Quality:</span>
+              <div className="flex gap-0.5 text-yellow-500">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={
+                      star <= item.qualityRating! ? "" : "text-gray-300"
+                    }
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {item.valueRating != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Value:</span>
+              <div className="flex gap-0.5 text-yellow-500">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={star <= item.valueRating! ? "" : "text-gray-300"}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {item.serviceRating != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Service:</span>
+              <div className="flex gap-0.5 text-yellow-500">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={
+                      star <= item.serviceRating! ? "" : "text-gray-300"
+                    }
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {item.locationRating != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Location:</span>
+              <div className="flex gap-0.5 text-yellow-500">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={
+                      star <= item.locationRating! ? "" : "text-gray-300"
+                    }
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Notes */}
+      {item.notes && (
+        <div className="text-sm">
+          <div className="text-muted-foreground font-medium mb-1">Notes:</div>
+          <p className="whitespace-pre-wrap">{item.notes}</p>
+        </div>
+      )}
+
+      {/* Review */}
+      {item.review && (
+        <div className="text-sm">
+          <div className="text-muted-foreground font-medium mb-1">Review:</div>
+          <p className="whitespace-pre-wrap">{item.review}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TripPage() {
   return (
@@ -635,39 +805,20 @@ function TripInner() {
       {!error && (
         <div className="card">
           <h2 className="text-xl font-semibold mb-2">Destinations</h2>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {destinations.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-sm flex-1">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-muted-foreground">
-                      {fmtMDY(r.startDate)}
-                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
-                      {[r.address, r.city, r.state, r.country]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                      {r.price != null
-                        ? ` • ${r.price} ${r.priceUnit || ""}`
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="text-sm navlink"
-                      onClick={() =>
-                        setSelectedItem({
-                          id: r.id!,
-                          name: r.name,
-                          subcollection: "destinations",
-                        })
-                      }
-                    >
-                      View Photos
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <PlaceCard
+                key={r.id}
+                item={r}
+                subcollection="destinations"
+                onViewPhotos={() =>
+                  setSelectedItem({
+                    id: r.id!,
+                    name: r.name,
+                    subcollection: "destinations",
+                  })
+                }
+              />
             ))}
             {destinations.length === 0 && (
               <div className="text-sm text-muted-foreground">No items yet.</div>
@@ -680,39 +831,20 @@ function TripInner() {
       {!error && (
         <div className="card">
           <h2 className="text-xl font-semibold mb-2">Activities</h2>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {activities.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-sm flex-1">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-muted-foreground">
-                      {fmtMDY(r.startDate)}
-                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
-                      {[r.address, r.city, r.state, r.country]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                      {r.price != null
-                        ? ` • ${r.price} ${r.priceUnit || ""}`
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="text-sm navlink"
-                      onClick={() =>
-                        setSelectedItem({
-                          id: r.id!,
-                          name: r.name,
-                          subcollection: "activities",
-                        })
-                      }
-                    >
-                      View Photos
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <PlaceCard
+                key={r.id}
+                item={r}
+                subcollection="activities"
+                onViewPhotos={() =>
+                  setSelectedItem({
+                    id: r.id!,
+                    name: r.name,
+                    subcollection: "activities",
+                  })
+                }
+              />
             ))}
             {activities.length === 0 && (
               <div className="text-sm text-muted-foreground">No items yet.</div>
@@ -725,39 +857,20 @@ function TripInner() {
       {!error && (
         <div className="card">
           <h2 className="text-xl font-semibold mb-2">Accommodations</h2>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {accommodations.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-sm flex-1">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-muted-foreground">
-                      {fmtMDY(r.startDate)}
-                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
-                      {[r.address, r.city, r.state, r.country]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                      {r.price != null
-                        ? ` • ${r.price} ${r.priceUnit || ""}`
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="text-sm navlink"
-                      onClick={() =>
-                        setSelectedItem({
-                          id: r.id!,
-                          name: r.name,
-                          subcollection: "accommodations",
-                        })
-                      }
-                    >
-                      View Photos
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <PlaceCard
+                key={r.id}
+                item={r}
+                subcollection="accommodations"
+                onViewPhotos={() =>
+                  setSelectedItem({
+                    id: r.id!,
+                    name: r.name,
+                    subcollection: "accommodations",
+                  })
+                }
+              />
             ))}
             {accommodations.length === 0 && (
               <div className="text-sm text-muted-foreground">No items yet.</div>
@@ -770,39 +883,20 @@ function TripInner() {
       {!error && (
         <div className="card">
           <h2 className="text-xl font-semibold mb-2">Restaurants</h2>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {restaurants.map((r) => (
-              <div key={r.id} className="rounded-xl border border-border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-sm flex-1">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-muted-foreground">
-                      {fmtMDY(r.startDate)}
-                      {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
-                      {[r.address, r.city, r.state, r.country]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                      {r.price != null
-                        ? ` • ${r.price} ${r.priceUnit || ""}`
-                        : ""}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="text-sm navlink"
-                      onClick={() =>
-                        setSelectedItem({
-                          id: r.id!,
-                          name: r.name,
-                          subcollection: "restaurants",
-                        })
-                      }
-                    >
-                      View Photos
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <PlaceCard
+                key={r.id}
+                item={r}
+                subcollection="restaurants"
+                onViewPhotos={() =>
+                  setSelectedItem({
+                    id: r.id!,
+                    name: r.name,
+                    subcollection: "restaurants",
+                  })
+                }
+              />
             ))}
             {restaurants.length === 0 && (
               <div className="text-sm text-muted-foreground">No items yet.</div>

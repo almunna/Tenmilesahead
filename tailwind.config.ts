@@ -26,7 +26,7 @@ module.exports = {
         foreground: "#0f172a", // dark text (slate-900)
         muted: "#64748b", // slate-500/600 for body copy
         "muted-foreground": "#64748b", // enables placeholder:text-muted-foreground
-        border: "#e2e8f0", // light border (slate-200)
+        border: "#cbd5e1", // darker border for better contrast (slate-300)
         ring: "#66bfcc", // focus ring stays in palette
 
         primary: {
