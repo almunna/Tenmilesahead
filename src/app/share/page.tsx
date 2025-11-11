@@ -31,6 +31,17 @@ type SimplePlace = {
   address?: string | null;
   createdAt?: number;
   updatedAt?: number;
+
+  // extra fields to display
+  phoneNumber?: string | null;
+  websiteUrl?: string | null;
+  notes?: string | null;
+  review?: string | null;
+  qualityRating?: number | null;
+  valueRating?: number | null;
+  serviceRating?: number | null;
+  locationRating?: number | null;
+
   // optional extras (transportationType/accommodationType, etc.)
   [key: string]: any;
 };
@@ -47,6 +58,137 @@ function fmtMDY(s?: string | number | null) {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+// ---------- details helpers (layout to match screenshot) ----------
+function Stars({ value }: { value?: number | null }) {
+  if (!value || value < 1) return null;
+  const v = Math.max(1, Math.min(5, Math.floor(value)));
+  return (
+    <span className="text-yellow-500" aria-label={`${v}/5`}>
+      {"★".repeat(v)}
+      {"☆".repeat(5 - v)}
+    </span>
+  );
+}
+
+function hasAnyDetails(d: SimplePlace) {
+  return Boolean(
+    d.phoneNumber ||
+      d.websiteUrl ||
+      d.price != null ||
+      (d.notes && d.notes.trim()) ||
+      (d.review && d.review.trim()) ||
+      d.qualityRating ||
+      d.valueRating ||
+      d.serviceRating ||
+      d.locationRating
+  );
+}
+
+function DetailLines({ d }: { d: SimplePlace }) {
+  const hasContact = !!(d.phoneNumber || d.websiteUrl);
+  const hasRatings = !!(
+    d.qualityRating ||
+    d.valueRating ||
+    d.serviceRating ||
+    d.locationRating
+  );
+  const hasPrice = d.price != null;
+  const hasNotes = !!(d.notes && d.notes.trim());
+  const hasReview = !!(d.review && d.review.trim());
+
+  if (!hasContact && !hasRatings && !hasPrice && !hasNotes && !hasReview)
+    return null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {hasContact && (
+        <>
+          {d.phoneNumber && (
+            <div className="text-sm">
+              <span className="font-medium">Phone:</span>{" "}
+              <span>{d.phoneNumber}</span>
+            </div>
+          )}
+          {d.websiteUrl && (
+            <div className="text-sm">
+              <span className="font-medium">Website:</span>{" "}
+              <a
+                href={
+                  /^https?:\/\//i.test(d.websiteUrl)
+                    ? d.websiteUrl
+                    : `https://${d.websiteUrl}`
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="underline text-primary"
+              >
+                {d.websiteUrl.replace(/^https?:\/\//, "")}
+              </a>
+            </div>
+          )}
+        </>
+      )}
+
+      {hasPrice && (
+        <div className="text-sm">
+          <span className="font-medium">Price:</span>{" "}
+          <span>
+            {d.price} {d.priceUnit || ""}
+          </span>
+        </div>
+      )}
+
+      {hasRatings && (
+        <div className="grid sm:grid-cols-2 gap-x-10 gap-y-2 text-sm">
+          <div>
+            {d.qualityRating ? (
+              <div>
+                <span className="font-medium">Quality:</span>{" "}
+                <Stars value={d.qualityRating} />
+              </div>
+            ) : null}
+            {d.serviceRating ? (
+              <div>
+                <span className="font-medium">Service:</span>{" "}
+                <Stars value={d.serviceRating} />
+              </div>
+            ) : null}
+          </div>
+          <div>
+            {d.valueRating ? (
+              <div>
+                <span className="font-medium">Value:</span>{" "}
+                <Stars value={d.valueRating} />
+              </div>
+            ) : null}
+            {d.locationRating ? (
+              <div>
+                <span className="font-medium">Location:</span>{" "}
+                <Stars value={d.locationRating} />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {hasNotes && (
+        <div className="text-sm">
+          <div className="font-medium">Notes:</div>
+          <div>{d.notes}</div>
+        </div>
+      )}
+
+      {hasReview && (
+        <div className="text-sm">
+          <div className="font-medium">Review:</div>
+          <div>{d.review}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------- main ----------------------------
 function SharePageContent() {
   const searchParams = useSearchParams();
   const tripId = searchParams.get("tripId");
@@ -58,7 +200,7 @@ function SharePageContent() {
   const [flipbookOpen, setFlipbookOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
-  // NEW: itinerary subcollections
+  // itinerary subcollections
   const [destinations, setDestinations] = useState<WithId<SimplePlace>[]>([]);
   const [activities, setActivities] = useState<WithId<SimplePlace>[]>([]);
   const [accommodations, setAccommodations] = useState<WithId<SimplePlace>[]>(
@@ -66,7 +208,7 @@ function SharePageContent() {
   );
   const [restaurants, setRestaurants] = useState<WithId<SimplePlace>[]>([]);
 
-  // NEW: item-level flipbook selection
+  // item-level flipbook selection
   const [selectedItem, setSelectedItem] = useState<{
     id: string;
     name: string;
@@ -76,6 +218,12 @@ function SharePageContent() {
       | "accommodations"
       | "restaurants";
   } | null>(null);
+
+  // itinerary details open/close
+  const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
+  const keyFor = (sub: string, id?: string) => `${sub}:${id || ""}`;
+  const toggleDetails = (k: string) =>
+    setOpenDetails((s) => ({ ...s, [k]: !s[k] }));
 
   useEffect(() => {
     if (!tripId) {
@@ -107,7 +255,7 @@ function SharePageContent() {
         );
         setMedia(mediaArr);
 
-        // Fetch subcollections (latest-first for consistency)
+        // Fetch subcollections (latest-first)
         const fetchList = async (sub: string) => {
           const qx = query(
             collection(db, "trips", tripId, sub),
@@ -374,7 +522,7 @@ function SharePageContent() {
               </div>
             )}
 
-            {/* NEW: Itinerary (chronological) */}
+            {/* Itinerary (chronological) */}
             <div className="card">
               <h2 className="text-xl font-semibold mb-3">Itinerary</h2>
               <div className="rounded-xl border border-border overflow-hidden">
@@ -395,38 +543,62 @@ function SharePageContent() {
                       const loc = [d.address, d.city, d.state, d.country]
                         .filter(Boolean)
                         .join(", ");
+                      const k = keyFor(row.subcollection, d.id);
+                      const canShowDetails = hasAnyDetails(d);
+                      const isOpen = !!openDetails[k];
                       return (
-                        <tr
-                          key={i}
-                          className="border-t border-border hover:bg-surface/50"
-                        >
-                          <td className="px-3 py-2">{row.kind}</td>
-                          <td className="px-3 py-2">{d.name || "—"}</td>
-                          <td className="px-3 py-2">
-                            {fmtMDY(d.startDate)}
-                            {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
-                          </td>
-                          <td className="px-3 py-2">{loc || "—"}</td>
-                          <td className="px-3 py-2">
-                            {d.price != null
-                              ? `${d.price} ${d.priceUnit || ""}`
-                              : "—"}
-                          </td>
-                          <td className="px-3 py-2">
-                            <button
-                              className="text-xs navlink"
-                              onClick={() =>
-                                setSelectedItem({
-                                  id: d.id!,
-                                  name: d.name,
-                                  subcollection: row.subcollection,
-                                })
-                              }
+                        <>
+                          <tr
+                            key={`${row.subcollection}-${d.id}-main-${i}`}
+                            className="border-t border-border hover:bg-surface/50"
+                          >
+                            <td className="px-3 py-2">{row.kind}</td>
+                            <td className="px-3 py-2">{d.name || "—"}</td>
+                            <td className="px-3 py-2">
+                              {fmtMDY(d.startDate)}
+                              {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                            </td>
+                            <td className="px-3 py-2">{loc || "—"}</td>
+                            <td className="px-3 py-2">
+                              {d.price != null
+                                ? `${d.price} ${d.priceUnit || ""}`
+                                : "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <button
+                                className="text-xs navlink"
+                                onClick={() =>
+                                  setSelectedItem({
+                                    id: d.id!,
+                                    name: d.name,
+                                    subcollection: row.subcollection,
+                                  })
+                                }
+                              >
+                                View Photos
+                              </button>
+                              {canShowDetails && (
+                                <button
+                                  className="text-xs navlink ml-3"
+                                  onClick={() => toggleDetails(k)}
+                                >
+                                  {isOpen ? "Hide Details" : "See Details"}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+
+                          {canShowDetails && isOpen && (
+                            <tr
+                              key={`${row.subcollection}-${d.id}-details-${i}`}
+                              className="border-t border-border"
                             >
-                              View Photos
-                            </button>
-                          </td>
-                        </tr>
+                              <td colSpan={6} className="px-3 pb-3">
+                                <DetailLines d={d} />
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       );
                     })}
                     {itineraryRows.length === 0 && (
@@ -444,7 +616,7 @@ function SharePageContent() {
               </div>
             </div>
 
-            {/* NEW: Destinations */}
+            {/* Destinations */}
             <div className="card">
               <h2 className="text-xl font-semibold mb-2">Destinations</h2>
               <div className="space-y-2">
@@ -466,6 +638,7 @@ function SharePageContent() {
                             ? ` • ${r.price} ${r.priceUnit || ""}`
                             : ""}
                         </div>
+                        <DetailLines d={r} />
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -492,7 +665,7 @@ function SharePageContent() {
               </div>
             </div>
 
-            {/* NEW: Activities */}
+            {/* Activities */}
             <div className="card">
               <h2 className="text-xl font-semibold mb-2">Activities</h2>
               <div className="space-y-2">
@@ -514,6 +687,7 @@ function SharePageContent() {
                             ? ` • ${r.price} ${r.priceUnit || ""}`
                             : ""}
                         </div>
+                        <DetailLines d={r} />
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -540,7 +714,7 @@ function SharePageContent() {
               </div>
             </div>
 
-            {/* NEW: Accommodations */}
+            {/* Accommodations */}
             <div className="card">
               <h2 className="text-xl font-semibold mb-2">Accommodations</h2>
               <div className="space-y-2">
@@ -562,6 +736,7 @@ function SharePageContent() {
                             ? ` • ${r.price} ${r.priceUnit || ""}`
                             : ""}
                         </div>
+                        <DetailLines d={r} />
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -588,7 +763,7 @@ function SharePageContent() {
               </div>
             </div>
 
-            {/* NEW: Restaurants */}
+            {/* Restaurants */}
             <div className="card">
               <h2 className="text-xl font-semibold mb-2">Restaurants</h2>
               <div className="space-y-2">
@@ -610,6 +785,7 @@ function SharePageContent() {
                             ? ` • ${r.price} ${r.priceUnit || ""}`
                             : ""}
                         </div>
+                        <DetailLines d={r} />
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -667,7 +843,7 @@ function SharePageContent() {
         />
       )}
 
-      {/* NEW: Item-level Flipbook */}
+      {/* Item-level Flipbook */}
       {selectedItem && tripId && (
         <ItemFlipbook
           tripId={tripId}
@@ -695,7 +871,7 @@ export default function SharePage() {
   );
 }
 
-/* ---------- NEW: Item-level Flipbook (per-entry) ---------- */
+/* ---------- Item-level Flipbook (per-entry) ---------- */
 function ItemFlipbook({
   tripId,
   linkedId,
@@ -749,8 +925,7 @@ function ItemFlipbook({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length]);
+  }, [items.length, onClose]);
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col">
