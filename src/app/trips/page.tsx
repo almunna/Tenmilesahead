@@ -26,6 +26,12 @@ import { COUNTRIES, getStates } from "@/lib/geo";
 import EditTripModal from "@/components/EditTripModal";
 import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
 
+/* NEW: modals for the extra menu options */
+import PhotosModal from "@/components/modals/PhotosModal";
+import ItineraryModal from "@/components/modals/ItineraryModal";
+import PlaceModal from "@/components/modals/PlaceModal";
+import ShareTripModal from "@/components/modals/ShareTripModal";
+
 /** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
 const isOtherish = (s: string) => {
   const t = s.trim().toLowerCase();
@@ -46,6 +52,10 @@ const sortAZWithOtherLast = (
   const head = arr.filter((x) => !isOtherish(x));
   return [...head, ...tail];
 };
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
 const TRANSPORT_OPTIONS = [
   "Bicycle",
@@ -84,6 +94,7 @@ function TripsInner() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [tripsLoaded, setTripsLoaded] = useState(false);
   const [shouldLoadTrips, setShouldLoadTrips] = useState(false); // ← defer trips subscription
+  const [shareFor, setShareFor] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -101,6 +112,16 @@ function TripsInner() {
   // ⋯ menu & editing state
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+
+  /* NEW: which tripId each modal is open for (null = closed) */
+  const [photosFor, setPhotosFor] = useState<string | null>(null);
+  const [itineraryFor, setItineraryFor] = useState<string | null>(null);
+  const [destinationsFor, setDestinationsFor] = useState<string | null>(null);
+  const [activitiesFor, setActivitiesFor] = useState<string | null>(null);
+  const [accommodationsFor, setAccommodationsFor] = useState<string | null>(
+    null
+  );
+  const [restaurantsFor, setRestaurantsFor] = useState<string | null>(null);
 
   // NEW: pre-create media selection + preview/captions/cover
   const [photosToAdd, setPhotosToAdd] = useState<File[]>([]);
@@ -126,12 +147,10 @@ function TripsInner() {
   useEffect(() => {
     setPreviewUrls((prev) => {
       const next = { ...prev };
-      // Add new previews
       for (const f of selectedFiles) {
         const k = fileKey(f);
         if (!next[k]) next[k] = URL.createObjectURL(f);
       }
-      // Remove previews for files no longer selected
       for (const k of Object.keys(next)) {
         if (!selectedKeys.includes(k)) {
           URL.revokeObjectURL(next[k]);
@@ -142,14 +161,12 @@ function TripsInner() {
     });
   }, [selectedFiles, selectedKeys]);
 
-  // Cleanup all object URLs on unmount
   useEffect(() => {
     return () => {
       for (const u of Object.values(previewUrls)) URL.revokeObjectURL(u);
     };
   }, [previewUrls]);
 
-  // Ensure a cover is chosen: default to first image if none or removed
   useEffect(() => {
     const firstImg = photosToAdd[0];
     if (!coverKey) {
@@ -234,7 +251,7 @@ function TripsInner() {
         setTrips(arr);
         setTripsLoaded(true);
       },
-      () => setTripsLoaded(true) // still mark as finished to hide skeleton
+      () => setTripsLoaded(true)
     );
 
     return () => unsub();
@@ -262,10 +279,8 @@ function TripsInner() {
       updatedAt: now,
     };
 
-    // 1) Create the trip
     const tripRef = await addDoc(collection(db, "trips"), payload as any);
 
-    // 2) Upload selected media (use captions + chosen cover)
     const allFiles = [...selectedFiles];
     if (allFiles.length > 0) {
       setUploadingMedia(true);
@@ -280,30 +295,26 @@ function TripsInner() {
           const kind = isImage ? "image" : isVideo ? "video" : "other";
           if (kind === "other") continue;
 
-          // Pre-create a Firestore media doc so we have a stable mediaId
           const mediaRef = doc(collection(db, "trips", tripRef.id, "media"));
           const mediaId = mediaRef.id;
 
-          // Storage path that matches your Storage rules
           const safeName = file.name.replace(/[^\w.\-]+/g, "_");
           const storagePath = `trip_media/${user.uid}/${tripRef.id}/${mediaId}/${safeName}`;
 
-          // Upload to Storage
           const sref = storageRef(storage, storagePath);
           await uploadBytes(sref, file);
           const downloadURL = await getDownloadURL(sref);
 
-          // Write media doc with all required fields (matches Firestore rules)
           await setDoc(mediaRef, {
             tripId: tripRef.id,
-            type: kind, // "image" | "video"
-            storagePath, // REQUIRED by rules
-            downloadURL, // REQUIRED by rules
-            createdAt: Date.now(), // REQUIRED by rules
-            caption: captions[k] || "", // optional
-            fileName: file.name, // optional
-            size: file.size, // optional
-            contentType: file.type, // optional
+            type: kind,
+            storagePath,
+            downloadURL,
+            createdAt: Date.now(),
+            caption: captions[k] || "",
+            fileName: file.name,
+            size: file.size,
+            contentType: file.type,
           } as any);
 
           if (isImage) {
@@ -325,7 +336,6 @@ function TripsInner() {
       }
     }
 
-    // 3) Reset the form and file pickers
     setForm({
       name: "",
       city: "",
@@ -359,14 +369,10 @@ function TripsInner() {
     return cityState || "—";
   };
   const fmt = (d: string | number | Date) => {
-    // Handle ISO date strings (YYYY-MM-DD) without timezone conversion
     if (typeof d === "string") {
       const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
-      if (match) {
-        return `${match[2]}/${match[3]}/${match[1]}`;
-      }
+      if (match) return `${match[2]}/${match[3]}/${match[1]}`;
     }
-    // Fallback for timestamps
     const dt = new Date(d);
     const m = String(dt.getMonth() + 1).padStart(2, "0");
     const day = String(dt.getDate()).padStart(2, "0");
@@ -376,10 +382,6 @@ function TripsInner() {
 
   const dateRangeOf = (t: Trip) => `${fmt(t.startDate)} → ${fmt(t.endDate)}`;
 
-  const clip = (s?: string | null, n = 120) =>
-    s ? (s.length > n ? s.slice(0, n) + "…" : s) : "";
-
-  // --- sorted lists for UI ---
   const sortedCountries = useMemo(() => sortAZWithOtherLast(COUNTRIES), []);
   const availableStates = useMemo(
     () => sortAZWithOtherLast(getStates(form.country)),
@@ -547,7 +549,7 @@ function TripsInner() {
             />
           </div>
 
-          {/* Media pickers (separate component) */}
+          {/* Media pickers */}
           <TripCreateMediaPicker
             photos={photosToAdd}
             videos={videosToAdd}
@@ -555,7 +557,7 @@ function TripsInner() {
             onVideosChange={setVideosToAdd}
           />
 
-          {/* NEW: Media preview/editor like the screenshot */}
+          {/* Media preview/editor */}
           <div className="md:col-span-3">
             <h3 className="text-lg font-semibold mb-3">Media</h3>
 
@@ -704,152 +706,23 @@ function TripsInner() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {trips.map((t) => (
-              <div
+              <TripCard
                 key={t.id}
-                className="rounded-2xl shadow-lg bg-[#2a3544]"
-                style={{ overflow: "visible" }}
-              >
-                {/* Cover with overlay content */}
-                <div className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden relative rounded-t-2xl">
-                  <CoverThumb tripId={t.id!} coverMediaId={t.coverMediaId} />
-
-                  {/* Dark gradient overlay at bottom */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
-
-                  {/* Trip info overlay on image - only title and location */}
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                    <h3 className="text-lg font-semibold mb-1 line-clamp-1">
-                      {t.name}
-                    </h3>
-
-                    {/* Location */}
-                    <div className="flex items-start gap-1.5">
-                      <svg
-                        className="w-4 h-4 mt-0.5 flex-shrink-0"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <span className="text-sm">{locationOf(t)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Content below image */}
-                <div className="p-4 space-y-3">
-                  {/* Date with calendar icon */}
-                  <div className="flex items-center gap-2 text-white/80">
-                    <svg
-                      className="w-4 h-4 flex-shrink-0"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span className="text-sm">{dateRangeOf(t)}</span>
-                  </div>
-
-                  {/* Bottom action bar with menu dropdown */}
-                  <div className="relative flex items-center gap-2">
-                    {/* Menu dropdown */}
-                    {menuOpenId === t.id && (
-                      <div className="absolute left-0 bottom-full mb-2 w-48 rounded-xl bg-[#3a4557] shadow-2xl overflow-hidden z-[100] border border-white/10">
-                        <div className="flex flex-col py-2">
-                          <button
-                            type="button"
-                            className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
-                            onClick={() => {
-                              setEditingTrip(t);
-                              setMenuOpenId(null);
-                            }}
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="flex items-center gap-3 px-4 py-3 text-red-400 text-sm hover:bg-white/10 transition-colors text-left"
-                            onClick={() => deleteTrip(t.id!)}
-                          >
-                            <svg
-                              className="w-5 h-5"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* View Trip button */}
-                    <Link
-                      className="flex items-center gap-2 px-4 py-2 bg-[#5eb9b3] hover:bg-[#4ea9a3] rounded-lg text-white text-sm font-medium transition-colors"
-                      href={`/trips/${t.id}`}
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path
-                          fillRule="evenodd"
-                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      View Trip
-                    </Link>
-
-                    {/* Menu button - toggles dropdown */}
-                    <button
-                      type="button"
-                      className="h-9 w-9 rounded-lg bg-[#3a4557] hover:bg-[#4a5567] flex items-center justify-center text-white transition-colors"
-                      aria-label="Menu"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpenId((prev) =>
-                          prev === t.id ? null : t.id || null
-                        );
-                      }}
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
+                trip={t}
+                locationOf={locationOf}
+                dateRangeOf={dateRangeOf}
+                setMenuOpenId={setMenuOpenId}
+                menuOpenId={menuOpenId}
+                setPhotosFor={setPhotosFor}
+                setItineraryFor={setItineraryFor}
+                setDestinationsFor={setDestinationsFor}
+                setActivitiesFor={setActivitiesFor}
+                setAccommodationsFor={setAccommodationsFor}
+                setRestaurantsFor={setRestaurantsFor}
+                setShareFor={setShareFor}
+                setEditingTrip={setEditingTrip}
+                deleteTrip={deleteTrip}
+              />
             ))}
 
             {trips.length === 0 && (
@@ -866,33 +739,212 @@ function TripsInner() {
           onClose={() => setEditingTrip(null)}
         />
       ) : null}
+
+      {/* NEW: Modals hooked to the new menu options */}
+      {photosFor && (
+        <PhotosModal tripId={photosFor} onClose={() => setPhotosFor(null)} />
+      )}
+      {itineraryFor && (
+        <ItineraryModal
+          tripId={itineraryFor}
+          onClose={() => setItineraryFor(null)}
+        />
+      )}
+      {destinationsFor && (
+        <PlaceModal
+          title="Destinations"
+          tripId={destinationsFor}
+          subcollection="destinations"
+          onClose={() => setDestinationsFor(null)}
+        />
+      )}
+      {activitiesFor && (
+        <PlaceModal
+          title="Activities"
+          tripId={activitiesFor}
+          subcollection="activities"
+          onClose={() => setActivitiesFor(null)}
+        />
+      )}
+      {accommodationsFor && (
+        <PlaceModal
+          title="Accommodations"
+          tripId={accommodationsFor}
+          subcollection="accommodations"
+          extraLeft={[
+            {
+              key: "transportationType",
+              label: "Transportation Type",
+              options: TRANSPORT_OPTIONS,
+            },
+          ]}
+          extraRight={[
+            {
+              key: "accommodationType",
+              label: "Accommodation Type",
+              options: ACCOMMODATION_OPTIONS,
+            },
+          ]}
+          onClose={() => setAccommodationsFor(null)}
+        />
+      )}
+      {restaurantsFor && (
+        <PlaceModal
+          title="Restaurants"
+          tripId={restaurantsFor}
+          subcollection="restaurants"
+          onClose={() => setRestaurantsFor(null)}
+        />
+      )}
+
+      {/* Share modal */}
+      {shareFor && (
+        <ShareTripModal tripId={shareFor} onClose={() => setShareFor(null)} />
+      )}
     </div>
   );
 }
 
-/** --- CoverThumb: bigger, crisp, and draggable to reposition crop --- */
-function CoverThumb({
-  tripId,
-  coverMediaId,
+/** --- TripCard with inline drag implementation --- */
+function TripCard({
+  trip,
+  locationOf,
+  dateRangeOf,
+  setMenuOpenId,
+  menuOpenId,
+  setPhotosFor,
+  setItineraryFor,
+  setDestinationsFor,
+  setActivitiesFor,
+  setAccommodationsFor,
+  setRestaurantsFor,
+  setShareFor,
+  setEditingTrip,
+  deleteTrip,
 }: {
-  tripId: string;
-  coverMediaId?: string | null;
+  trip: Trip;
+  locationOf: (t: Trip) => string;
+  dateRangeOf: (t: Trip) => string;
+  setMenuOpenId: (id: string | null) => void;
+  menuOpenId: string | null;
+  setPhotosFor: (id: string) => void;
+  setItineraryFor: (id: string) => void;
+  setDestinationsFor: (id: string) => void;
+  setActivitiesFor: (id: string) => void;
+  setAccommodationsFor: (id: string) => void;
+  setRestaurantsFor: (id: string) => void;
+  setShareFor: (id: string) => void;
+  setEditingTrip: (trip: Trip) => void;
+  deleteTrip: (id: string) => void;
 }) {
   const [cover, setCover] = useState<MediaItem | null>(null);
   const [allMedia, setAllMedia] = useState<MediaItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [showArrows, setShowArrows] = useState(false);
-  const [focus, setFocus] = useState<{ x: number; y: number }>({
-    x: 50,
-    y: 50,
-  });
-  const [dragging, setDragging] = useState(false);
-  const boxRef = useRef<HTMLDivElement | null>(null);
 
-  // watch all media for this trip
+  // --- Cover focus (drag to reposition) ---
+  const [coverFocus, setCoverFocus] = useState<{ x: number; y: number }>(() => {
+    const cf: any = (trip as any).coverFocus;
+    return {
+      x: typeof cf?.x === "number" ? cf.x : 50,
+      y: typeof cf?.y === "number" ? cf.y : 50,
+    };
+  });
+
+  useEffect(() => {
+    const cf: any = (trip as any).coverFocus;
+    if (cf && typeof cf.x === "number" && typeof cf.y === "number") {
+      setCoverFocus({ x: cf.x, y: cf.y });
+    }
+  }, [(trip as any).coverFocus?.x, (trip as any).coverFocus?.y]);
+
+  const coverRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const startRef = useRef<{
+    x: number;
+    y: number;
+    fx: number;
+    fy: number;
+  } | null>(null);
+
+  function startDrag(clientX: number, clientY: number) {
+    if (!coverRef.current) return;
+    const fx = coverFocus.x;
+    const fy = coverFocus.y;
+    startRef.current = { x: clientX, y: clientY, fx, fy };
+    draggingRef.current = true;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+  }
+
+  function moveDrag(clientX: number, clientY: number) {
+    if (!draggingRef.current || !coverRef.current || !startRef.current) return;
+    const rect = coverRef.current.getBoundingClientRect();
+    const dx = ((clientX - startRef.current.x) / rect.width) * 100;
+    const dy = ((clientY - startRef.current.y) / rect.height) * 100;
+    const nx = clamp(startRef.current.fx + dx, 0, 100);
+    const ny = clamp(startRef.current.fy + dy, 0, 100);
+    setCoverFocus({ x: nx, y: ny });
+  }
+
+  async function endDrag() {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+    try {
+      await updateDoc(doc(db, "trips", trip.id), {
+        coverFocus: {
+          x: Math.round(coverFocus.x),
+          y: Math.round(coverFocus.y),
+        },
+        updatedAt: Date.now(),
+      } as any);
+    } catch (e) {
+      console.error("Failed to save coverFocus", e);
+    }
+  }
+
+  // Window-level mouse listeners
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!draggingRef.current) return;
+      moveDrag(e.clientX, e.clientY);
+    }
+    function onUp() {
+      endDrag();
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [coverFocus.x, coverFocus.y]);
+
+  // Window-level touch listeners
+  useEffect(() => {
+    function onTouchMove(e: TouchEvent) {
+      if (!draggingRef.current) return;
+      const t = e.touches[0];
+      if (t) moveDrag(t.clientX, t.clientY);
+    }
+    function onTouchEnd() {
+      endDrag();
+    }
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [coverFocus.x, coverFocus.y]);
+
+  // Fetch all media for this trip
   useEffect(() => {
     const q = query(
-      collection(db, "trips", tripId, "media"),
+      collection(db, "trips", trip.id, "media"),
       orderBy("createdAt", "desc")
     );
     const unsub = onSnapshot(
@@ -905,203 +957,412 @@ function CoverThumb({
       () => setAllMedia([])
     );
     return () => unsub();
-  }, [tripId]);
+  }, [trip.id]);
 
-  // set current media based on navigation
+  // Set current cover based on index
   useEffect(() => {
     if (allMedia.length === 0) {
       setCover(null);
       return;
     }
     const media = allMedia[currentIndex];
-    if (media) {
-      setCover(media);
-    }
+    if (media) setCover(media);
   }, [allMedia, currentIndex]);
 
-  // initialize index based on cover media
+  // Set initial index based on coverMediaId
   useEffect(() => {
-    if (!coverMediaId || allMedia.length === 0) return;
-    const idx = allMedia.findIndex((m) => m.id === coverMediaId);
-    if (idx !== -1) {
-      setCurrentIndex(idx);
-    }
-  }, [coverMediaId, allMedia]);
-
-  // read coverFocus from trip (if present)
-  useEffect(() => {
-    const tref = doc(db, "trips", tripId);
-    const unsub = onSnapshot(
-      tref,
-      (snap) => {
-        const d = snap.data() as any;
-        if (
-          d?.coverFocus &&
-          typeof d.coverFocus.x === "number" &&
-          typeof d.coverFocus.y === "number"
-        ) {
-          setFocus({ x: d.coverFocus.x, y: d.coverFocus.y });
-        }
-      },
-      () => {}
-    );
-    return () => unsub();
-  }, [tripId]);
-
-  // helpers to convert pointer position → % focus
-  function calcFocusFromEvent(e: React.MouseEvent | React.TouchEvent) {
-    const box = boxRef.current;
-    if (!box) return focus;
-    const rect = box.getBoundingClientRect();
-    const clientX =
-      "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY =
-      "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    return { x: Math.round(x * 100), y: Math.round(y * 100) };
-  }
-
-  function clamp01(n: number) {
-    return Math.max(0, Math.min(100, Math.round(n)));
-  }
-
-  let lastSaved: { x: number; y: number } | null = null;
-
-  async function persistFocus(next: { x: number; y: number }) {
-    // clamp to 0..100 and avoid redundant writes
-    const clamped = { x: clamp01(next.x), y: clamp01(next.y) };
-    if (lastSaved && lastSaved.x === clamped.x && lastSaved.y === clamped.y)
-      return;
-
-    try {
-      await updateDoc(doc(db, "trips", tripId), {
-        coverFocus: clamped,
-        updatedAt: Date.now(),
-      } as any);
-      lastSaved = clamped;
-    } catch (err) {
-      // optional: surface or log to help debug rules
-      // console.warn("persistFocus failed", err);
-    }
-  }
-
-  function startDrag(e: React.MouseEvent | React.TouchEvent) {
-    // e.preventDefault();
-    setDragging(true);
-    const next = calcFocusFromEvent(e);
-    setFocus(next);
-    persistFocus(next);
-  }
-
-  function moveDrag(e: React.MouseEvent | React.TouchEvent) {
-    if (!dragging) return;
-    const next = calcFocusFromEvent(e);
-    setFocus(next);
-  }
-
-  function endDrag() {
-    if (dragging) {
-      persistFocus(focus);
-      setDragging(false);
-    }
-  }
+    if (!trip.coverMediaId || allMedia.length === 0) return;
+    const idx = allMedia.findIndex((m) => m.id === trip.coverMediaId);
+    if (idx !== -1) setCurrentIndex(idx);
+  }, [trip.coverMediaId, allMedia]);
 
   function goToPrevious(e: React.MouseEvent) {
     e.stopPropagation();
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   }
 
   function goToNext(e: React.MouseEvent) {
     e.stopPropagation();
-    if (currentIndex < allMedia.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
+    if (currentIndex < allMedia.length - 1) setCurrentIndex(currentIndex + 1);
   }
-
-  if (!cover) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-white/60 text-xs bg-gradient-to-b from-slate-800 to-slate-900">
-        No cover yet
-      </div>
-    );
-  }
-
-  const mediaProps = {
-    style: { objectPosition: `${focus.x}% ${focus.y}%` },
-    className: "w-full h-full object-cover select-none pointer-events-none",
-    draggable: false,
-  } as const;
 
   return (
     <div
-      ref={boxRef}
-      className="absolute inset-0 w-full h-full bg-black/5 group"
-      onMouseDown={startDrag}
-      onMouseMove={moveDrag}
-      onMouseUp={endDrag}
-      onMouseLeave={endDrag}
-      onTouchStart={startDrag}
-      onTouchMove={moveDrag}
-      onTouchEnd={endDrag}
-      onMouseEnter={() => setShowArrows(true)}
-      aria-label="Drag to reposition cover"
-      title="Drag to reposition cover"
+      className="rounded-2xl shadow-lg bg-[#2a3544]"
+      style={{ overflow: "visible" }}
     >
-      {cover.type === "image" ? (
-        <img
-          src={cover.downloadURL}
-          alt={cover.caption || "Cover"}
-          loading="lazy"
-          decoding="async"
-          {...mediaProps}
-        />
-      ) : (
-        <video
-          src={cover.downloadURL}
-          muted
-          playsInline
-          {...(mediaProps as any)}
-        />
-      )}
+      {/* Cover with overlay content */}
+      <div
+        ref={coverRef}
+        className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden relative rounded-t-2xl group"
+      >
+        {cover?.type === "image" ? (
+          <img
+            src={cover.downloadURL}
+            alt={cover.caption || trip.name}
+            className="w-full h-full object-cover select-none"
+            style={{ objectPosition: `${coverFocus.x}% ${coverFocus.y}%` }}
+            draggable={false}
+          />
+        ) : cover?.type === "video" ? (
+          <video
+            src={cover.downloadURL}
+            className="w-full h-full object-cover select-none"
+            style={{ objectPosition: `${coverFocus.x}% ${coverFocus.y}%` }}
+            muted
+            playsInline
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-white/60 text-xs bg-gradient-to-b from-slate-800 to-slate-900">
+            No cover yet
+          </div>
+        )}
 
-      {/* Navigation arrows - show on hover when multiple images */}
-      {allMedia.length > 1 && (
-        <>
-          {currentIndex > 0 && (
-            <button
-              type="button"
-              onClick={goToPrevious}
-              className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
-              aria-label="Previous image"
-            >
-              ←
-            </button>
-          )}
-          {currentIndex < allMedia.length - 1 && (
-            <button
-              type="button"
-              onClick={goToNext}
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
-              aria-label="Next image"
-            >
-              →
-            </button>
-          )}
-        </>
-      )}
+        {/* Drag overlay (only when there is media) */}
+        {(cover?.type === "image" || cover?.type === "video") && (
+          <div
+            className="absolute inset-0 cursor-grab"
+            onMouseDown={(e) => startDrag(e.clientX, e.clientY)}
+            onTouchStart={(e) => {
+              const t = e.touches[0];
+              if (t) startDrag(t.clientX, t.clientY);
+            }}
+            onContextMenu={(e) => {
+              if (draggingRef.current) e.preventDefault();
+            }}
+          />
+        )}
 
-      {/* Image counter */}
-      {allMedia.length > 1 && (
-        <div className="pointer-events-none absolute top-2 left-2 text-xs px-2 py-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-          {currentIndex + 1} / {allMedia.length}
+        {/* Dark gradient overlay at bottom */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none"></div>
+
+        {/* Trip info overlay on image - only title and location */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 text-white pointer-events-none">
+          <h3 className="text-lg font-semibold mb-1 line-clamp-1">
+            {trip.name}
+          </h3>
+
+          {/* Location */}
+          <div className="flex items-start gap-1.5">
+            <svg
+              className="w-4 h-4 mt-0.5 flex-shrink-0"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="text-sm">{locationOf(trip)}</span>
+          </div>
         </div>
-      )}
 
-      <div className="pointer-events-none absolute bottom-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white">
-        Drag to reposition
+        {/* Navigation arrows (show on hover when multiple media) */}
+        {allMedia.length > 1 && (
+          <>
+            {currentIndex > 0 && (
+              <button
+                type="button"
+                onClick={goToPrevious}
+                className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                aria-label="Previous image"
+              >
+                ←
+              </button>
+            )}
+            {currentIndex < allMedia.length - 1 && (
+              <button
+                type="button"
+                onClick={goToNext}
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                aria-label="Next image"
+              >
+                →
+              </button>
+            )}
+          </>
+        )}
+
+        {/* Photo counter */}
+        {allMedia.length > 1 && (
+          <div className="pointer-events-none absolute top-2 left-2 text-xs px-2 py-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+            {currentIndex + 1} / {allMedia.length}
+          </div>
+        )}
+
+        {/* Drag hint */}
+        {(cover?.type === "image" || cover?.type === "video") && (
+          <div className="pointer-events-none absolute bottom-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white">
+            Drag to reposition
+          </div>
+        )}
+      </div>
+
+                {/* Content below image */}
+      <div className="p-4 space-y-3">
+        {/* Date with calendar icon */}
+        <div className="flex items-center gap-2 text-white/80">
+          <svg
+            className="w-4 h-4 flex-shrink-0"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="text-sm">{dateRangeOf(trip)}</span>
+        </div>
+
+        {/* Bottom action bar with dropdown and standalone icons */}
+        <div className="relative flex items-center gap-2">
+          {/* View Trip */}
+          <Link
+            className="flex items-center gap-2 px-4 py-2 bg-[#5eb9b3] hover:bg-[#4ea9a3] rounded-lg text-white text-sm font-medium transition-colors"
+            href={`/trips/${trip.id}`}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+              <path
+                fillRule="evenodd"
+                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+            View Trip
+          </Link>
+
+          {/* Menu button (opens dropdown for Photos/Itinerary/Places) */}
+          <button
+            type="button"
+            className="h-9 w-9 rounded-lg bg-[#3a4557] hover:bg-[#4a5567] flex items-center justify-center text-white transition-colors"
+            aria-label="Menu"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpenId(menuOpenId === trip.id ? null : trip.id || null);
+            }}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+          {/* Share (opens ShareTripModal) */}
+          <button
+            type="button"
+            className="h-9 w-9 rounded-lg bg-[#3a4557] hover:bg-[#4a5567] flex items-center justify-center text-white transition-colors"
+            aria-label="Share"
+            title="Share"
+            onClick={() => setShareFor(trip.id!)}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+            </svg>
+          </button>
+
+          {/* Edit (standalone) */}
+          <button
+            type="button"
+            className="h-9 w-9 rounded-lg bg-[#3a4557] hover:bg-[#4a5567] flex items-center justify-center text-white transition-colors"
+            aria-label="Edit"
+            title="Edit"
+            onClick={() => setEditingTrip(trip)}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793z" />
+              <path d="M11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+            </svg>
+          </button>
+
+          {/* Delete (standalone, red) */}
+          <button
+            type="button"
+            className="h-9 w-9 rounded-lg bg-red-600 hover:bg-red-700 flex items-center justify-center text-white transition-colors"
+            aria-label="Delete"
+            title="Delete"
+            onClick={() => deleteTrip(trip.id!)}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+          {/* Dropdown (anchored to the Menu button) */}
+          {menuOpenId === trip.id && (
+            <div className="absolute left-0 bottom-full mb-2 w-56 rounded-xl bg-[#3a4557] shadow-2xl overflow-hidden z-[100] border border-white/10">
+              <div className="flex flex-col py-2">
+                {/* Photos */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg:white/10 hover:bg-white/10 transition-colors text-left"
+                  onClick={() => {
+                    setPhotosFor(trip.id!);
+                    setMenuOpenId(null);
+                  }}
+                  title="Photos"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>Photos</span>
+                </button>
+
+                {/* Itinerary */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
+                  onClick={() => {
+                    setItineraryFor(trip.id!);
+                    setMenuOpenId(null);
+                  }}
+                  title="Itinerary"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>Itinerary</span>
+                </button>
+
+                {/* Destinations */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
+                  onClick={() => {
+                    setDestinationsFor(trip.id!);
+                    setMenuOpenId(null);
+                  }}
+                  title="Destinations"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>Destinations</span>
+                </button>
+
+                {/* Activities */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
+                  onClick={() => {
+                    setActivitiesFor(trip.id!);
+                    setMenuOpenId(null);
+                  }}
+                  title="Activities"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
+                  </svg>
+                  <span>Activities</span>
+                </button>
+
+                {/* Accommodations */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
+                  onClick={() => {
+                    setAccommodationsFor(trip.id!);
+                    setMenuOpenId(null);
+                  }}
+                  title="Accommodations"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                  </svg>
+                  <span>Accommodations</span>
+                </button>
+
+                {/* Restaurants */}
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors text-left"
+                  onClick={() => {
+                    setRestaurantsFor(trip.id!);
+                    setMenuOpenId(null);
+                  }}
+                  title="Restaurants"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path
+                      fillRule="evenodd"
+                      d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>Restaurants</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -413,9 +413,11 @@ function fmtMDY(s?: string | number | null) {
 function HomeInner() {
   const { user } = useAuth();
 
-  // Display name editor (unchanged)
+  // Display name editor (animates up then hides after successful save)
   const [username, setUsername] = useState("");
   const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameSaved, setUsernameSaved] = useState(false);
+  const [usernameAnimating, setUsernameAnimating] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -442,6 +444,9 @@ function HomeInner() {
         },
         { merge: true }
       );
+      // Trigger small slide-up fade, then remove the section
+      setUsernameAnimating(true);
+      setTimeout(() => setUsernameSaved(true), 380);
     } finally {
       setUsernameSaving(false);
     }
@@ -520,29 +525,33 @@ function HomeInner() {
   return (
     <main className="min-h-dvh relative z-10">
       <div className="container py-6 space-y-10">
-        {/* Username editor */}
-        <section className="card">
-          <h2 className="text-xl font-semibold">Your Display Name</h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            This name is shown on your reviews. (Required)
-          </p>
-          <div className="mt-4 flex flex-col sm:flex-row gap-3">
-            <input
-              className="input flex-1"
-              placeholder="e.g., Williams’ Family Adventures"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-            <button
-              className="btn"
-              onClick={saveUsername}
-              disabled={!username.trim() || usernameSaving}
-            >
-              {usernameSaving ? "Saving..." : "Save Name"}
-            </button>
-          </div>
-        </section>
+        {/* Username editor (slides up then hides) */}
+        {!usernameSaved && (
+          <section
+            className={`card ${usernameAnimating ? "tma-slideUpOut" : ""}`}
+          >
+            <h2 className="text-xl font-semibold">Your Display Name</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              This name is shown on your reviews. (Required)
+            </p>
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
+              <input
+                className="input flex-1"
+                placeholder="e.g., Williams’ Family Adventures"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+              <button
+                className="btn"
+                onClick={saveUsername}
+                disabled={!username.trim() || usernameSaving}
+              >
+                {usernameSaving ? "Saving..." : "Save Name"}
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* My Trips (moved to component) */}
         <MyTrips trips={trips} />
@@ -579,6 +588,24 @@ function HomeInner() {
           </div>
         </div>
       )}
+
+      {/* Local animation styles */}
+      <style jsx>{`
+        .tma-slideUpOut {
+          animation: tma-slide-up-out 0.35s ease-in forwards;
+          will-change: transform, opacity;
+        }
+        @keyframes tma-slide-up-out {
+          0% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-24px);
+          }
+        }
+      `}</style>
     </main>
   );
 }

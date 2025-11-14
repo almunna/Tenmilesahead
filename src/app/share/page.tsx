@@ -1,7 +1,7 @@
 // File: app/share/page.tsx (or wherever your Share page lives)
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   doc,
@@ -326,6 +326,27 @@ function SharePageContent() {
     return rows;
   })();
 
+  // Extract unique transportation and accommodation types
+  const uniqueTypes = (() => {
+    const transportationTypes = new Set<string>();
+    const accommodationTypes = new Set<string>();
+
+    // Check accommodations subcollection for both transportation and accommodation types
+    accommodations.forEach((acc) => {
+      if (acc.transportationType && typeof acc.transportationType === 'string') {
+        transportationTypes.add(acc.transportationType);
+      }
+      if (acc.accommodationType && typeof acc.accommodationType === 'string') {
+        accommodationTypes.add(acc.accommodationType);
+      }
+    });
+
+    return {
+      transportation: Array.from(transportationTypes),
+      accommodation: Array.from(accommodationTypes),
+    };
+  })();
+
   // Dismiss banner and store in localStorage
   const dismissBanner = () => {
     setBannerDismissed(true);
@@ -438,10 +459,23 @@ function SharePageContent() {
                     {fmtMDY(trip.startDate)} → {fmtMDY(trip.endDate)}
                   </div>
                 </div>
-                {trip.transportationType && (
-                  <div>
-                    <div className="text-muted-foreground">Transportation</div>
-                    <div className="font-medium">{trip.transportationType}</div>
+                {(uniqueTypes.transportation.length > 0 || uniqueTypes.accommodation.length > 0) && (
+                  <div className="sm:col-span-2">
+                    <div className="text-muted-foreground">Transportation & Accommodation</div>
+                    <div className="font-medium flex flex-wrap gap-2 mt-1">
+                      {/* Transportation types first */}
+                      {uniqueTypes.transportation.map((type) => (
+                        <span key={`transport-${type}`} className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5 border border-border">
+                          {type}
+                        </span>
+                      ))}
+                      {/* Accommodation types second */}
+                      {uniqueTypes.accommodation.map((type) => (
+                        <span key={`accommodation-${type}`} className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5 border border-border">
+                          {type}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {trip.description && (
@@ -547,9 +581,8 @@ function SharePageContent() {
                       const canShowDetails = hasAnyDetails(d);
                       const isOpen = !!openDetails[k];
                       return (
-                        <>
+                        <React.Fragment key={`${row.subcollection}-${d.id}-${i}`}>
                           <tr
-                            key={`${row.subcollection}-${d.id}-main-${i}`}
                             className="border-t border-border hover:bg-surface/50"
                           >
                             <td className="px-3 py-2">{row.kind}</td>
@@ -590,7 +623,6 @@ function SharePageContent() {
 
                           {canShowDetails && isOpen && (
                             <tr
-                              key={`${row.subcollection}-${d.id}-details-${i}`}
                               className="border-t border-border"
                             >
                               <td colSpan={6} className="px-3 pb-3">
@@ -598,7 +630,7 @@ function SharePageContent() {
                               </td>
                             </tr>
                           )}
-                        </>
+                        </React.Fragment>
                       );
                     })}
                     {itineraryRows.length === 0 && (

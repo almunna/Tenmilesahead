@@ -517,26 +517,8 @@ function TripTile({
         </div>
 
         {/* Cover */}
-        <div className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden">
-          {cover?.type === "image" ? (
-            <img
-              src={cover.downloadURL}
-              alt={cover.caption || trip.name}
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          ) : cover?.type === "video" ? (
-            <video
-              src={cover.downloadURL}
-              className="w-full h-full object-cover"
-              muted
-              playsInline
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-              No cover yet
-            </div>
-          )}
+        <div className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden relative">
+          <CoverThumbHome tripId={trip.id!} coverMediaId={trip.coverMediaId} />
         </div>
 
         {/* Body */}
@@ -1565,6 +1547,221 @@ function ModalShell({
           </button>
         </div>
         <div className="p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** --- CoverThumbHome: Cover photo with drag-to-reposition and navigation arrows --- */
+function CoverThumbHome({
+  tripId,
+  coverMediaId,
+}: {
+  tripId: string;
+  coverMediaId?: string | null;
+}) {
+  const [cover, setCover] = useState<MediaItem | null>(null);
+  const [allMedia, setAllMedia] = useState<MediaItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [focus, setFocus] = useState<{ x: number; y: number }>({
+    x: 50,
+    y: 50,
+  });
+  const [dragging, setDragging] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "trips", tripId, "media"),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const arr: MediaItem[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setAllMedia(arr);
+      },
+      () => setAllMedia([])
+    );
+    return () => unsub();
+  }, [tripId]);
+
+  useEffect(() => {
+    if (allMedia.length === 0) {
+      setCover(null);
+      return;
+    }
+    const media = allMedia[currentIndex];
+    if (media) setCover(media);
+  }, [allMedia, currentIndex]);
+
+  useEffect(() => {
+    if (!coverMediaId || allMedia.length === 0) return;
+    const idx = allMedia.findIndex((m) => m.id === coverMediaId);
+    if (idx !== -1) setCurrentIndex(idx);
+  }, [coverMediaId, allMedia]);
+
+  useEffect(() => {
+    const tref = doc(db, "trips", tripId);
+    const unsub = onSnapshot(
+      tref,
+      (snap) => {
+        const d = snap.data() as any;
+        if (
+          d?.coverFocus &&
+          typeof d.coverFocus.x === "number" &&
+          typeof d.coverFocus.y === "number"
+        ) {
+          setFocus({ x: d.coverFocus.x, y: d.coverFocus.y });
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [tripId]);
+
+  function calcFocusFromEvent(e: React.MouseEvent | React.TouchEvent) {
+    const box = boxRef.current;
+    if (!box) return focus;
+    const rect = box.getBoundingClientRect();
+    const clientX =
+      "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY =
+      "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    return { x: Math.round(x * 100), y: Math.round(y * 100) };
+  }
+
+  function clamp01(n: number) {
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  let lastSaved: { x: number; y: number } | null = null;
+
+  async function persistFocus(next: { x: number; y: number }) {
+    const clamped = { x: clamp01(next.x), y: clamp01(next.y) };
+    if (lastSaved && lastSaved.x === clamped.x && lastSaved.y === clamped.y)
+      return;
+
+    try {
+      await updateDoc(doc(db, "trips", tripId), {
+        coverFocus: clamped,
+        updatedAt: Date.now(),
+      } as any);
+      lastSaved = clamped;
+    } catch {}
+  }
+
+  function startDrag(e: React.MouseEvent | React.TouchEvent) {
+    setDragging(true);
+    const next = calcFocusFromEvent(e);
+    setFocus(next);
+    persistFocus(next);
+  }
+
+  function moveDrag(e: React.MouseEvent | React.TouchEvent) {
+    if (!dragging) return;
+    const next = calcFocusFromEvent(e);
+    setFocus(next);
+  }
+
+  function endDrag() {
+    if (dragging) {
+      persistFocus(focus);
+      setDragging(false);
+    }
+  }
+
+  function goToPrevious(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+  }
+
+  function goToNext(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (currentIndex < allMedia.length - 1) setCurrentIndex(currentIndex + 1);
+  }
+
+  if (!cover) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-white/60 text-xs bg-gradient-to-b from-slate-800 to-slate-900">
+        No cover yet
+      </div>
+    );
+  }
+
+  const mediaProps = {
+    style: { objectPosition: `${focus.x}% ${focus.y}%` },
+    className: "w-full h-full object-cover select-none pointer-events-none",
+    draggable: false,
+  } as const;
+
+  return (
+    <div
+      ref={boxRef}
+      className="absolute inset-0 w-full h-full bg-black/5 group"
+      onMouseDown={startDrag}
+      onMouseMove={moveDrag}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      onTouchStart={startDrag}
+      onTouchMove={moveDrag}
+      onTouchEnd={endDrag}
+      aria-label="Drag to reposition cover"
+      title="Drag to reposition cover"
+    >
+      {cover.type === "image" ? (
+        <img
+          src={cover.downloadURL}
+          alt={cover.caption || "Cover"}
+          loading="lazy"
+          decoding="async"
+          {...mediaProps}
+        />
+      ) : (
+        <video
+          src={cover.downloadURL}
+          muted
+          playsInline
+          {...(mediaProps as any)}
+        />
+      )}
+
+      {allMedia.length > 1 && (
+        <>
+          {currentIndex > 0 && (
+            <button
+              type="button"
+              onClick={goToPrevious}
+              className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              aria-label="Previous image"
+            >
+              ←
+            </button>
+          )}
+          {currentIndex < allMedia.length - 1 && (
+            <button
+              type="button"
+              onClick={goToNext}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
+              aria-label="Next image"
+            >
+              →
+            </button>
+          )}
+        </>
+      )}
+
+      {allMedia.length > 1 && (
+        <div className="pointer-events-none absolute top-2 left-2 text-xs px-2 py-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+          {currentIndex + 1} / {allMedia.length}
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute bottom-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white">
+        Drag to reposition
       </div>
     </div>
   );

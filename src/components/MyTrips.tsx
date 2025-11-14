@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   deleteDoc,
+  updateDoc, // ✅ added
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Trip, MediaItem } from "@/lib/types";
@@ -118,10 +119,16 @@ function fmtMDY(s?: string | number | null) {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
 function TripTile({ trip }: { trip: WithId<Trip> }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [cover, setCover] = useState<MediaItem | null>(null);
+  const [allMedia, setAllMedia] = useState<MediaItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [showMenuAbove, setShowMenuAbove] = useState(false);
   const buttonContainerRef = useRef<HTMLDivElement>(null);
@@ -134,16 +141,120 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
   const [restaurantsOpen, setRestaurantsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
-  // Check position when menu opens to decide if menu should show above or below
+  // --- Cover focus (drag to reposition) ---
+  const [coverFocus, setCoverFocus] = useState<{ x: number; y: number }>(() => {
+    const cf: any = (trip as any).coverFocus;
+    return {
+      x: typeof cf?.x === "number" ? cf.x : 50,
+      y: typeof cf?.y === "number" ? cf.y : 50,
+    };
+  });
+  useEffect(() => {
+    const cf: any = (trip as any).coverFocus;
+    if (cf && typeof cf.x === "number" && typeof cf.y === "number") {
+      setCoverFocus({ x: cf.x, y: cf.y });
+    }
+  }, [
+    /* re-run when trip updates */ (trip as any).coverFocus?.x,
+    (trip as any).coverFocus?.y,
+  ]);
+
+  const coverRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const startRef = useRef<{
+    x: number;
+    y: number;
+    fx: number;
+    fy: number;
+  } | null>(null);
+
+  function startDrag(clientX: number, clientY: number) {
+    if (!coverRef.current) return;
+    const rect = coverRef.current.getBoundingClientRect();
+    // convert pointer to % in element
+    const fx = coverFocus.x;
+    const fy = coverFocus.y;
+    startRef.current = { x: clientX, y: clientY, fx, fy };
+    draggingRef.current = true;
+    // Prevent selecting text while dragging
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+  }
+
+  function moveDrag(clientX: number, clientY: number) {
+    if (!draggingRef.current || !coverRef.current || !startRef.current) return;
+    const rect = coverRef.current.getBoundingClientRect();
+    const dx = ((clientX - startRef.current.x) / rect.width) * 100;
+    const dy = ((clientY - startRef.current.y) / rect.height) * 100;
+    const nx = clamp(startRef.current.fx + dx, 0, 100);
+    const ny = clamp(startRef.current.fy + dy, 0, 100);
+    setCoverFocus({ x: nx, y: ny });
+  }
+
+  async function endDrag() {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+    // persist to Firestore
+    try {
+      await updateDoc(doc(db, "trips", trip.id), {
+        coverFocus: {
+          x: Math.round(coverFocus.x),
+          y: Math.round(coverFocus.y),
+        },
+        updatedAt: Date.now(),
+      } as any);
+    } catch (e) {
+      // swallow error silently to avoid UI changes; user can retry by dragging again
+      console.error("Failed to save coverFocus", e);
+    }
+  }
+
+  // pointer listeners (mouse)
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!draggingRef.current) return;
+      moveDrag(e.clientX, e.clientY);
+    }
+    function onUp() {
+      endDrag();
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [coverFocus.x, coverFocus.y]);
+
+  // pointer listeners (touch)
+  useEffect(() => {
+    function onTouchMove(e: TouchEvent) {
+      if (!draggingRef.current) return;
+      const t = e.touches[0];
+      if (t) moveDrag(t.clientX, t.clientY);
+    }
+    function onTouchEnd() {
+      endDrag();
+    }
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [coverFocus.x, coverFocus.y]);
+
+  // --- Decide menu placement
   useEffect(() => {
     if (menuOpen && buttonContainerRef.current) {
       const rect = buttonContainerRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       const spaceBelow = viewportHeight - rect.bottom;
       const spaceAbove = rect.top;
-
-      // If there's more space above than below, or if we're in the bottom half of viewport
-      // show menu above, otherwise show below
       setShowMenuAbove(
         spaceAbove > spaceBelow || rect.bottom > viewportHeight / 2
       );
@@ -151,26 +262,50 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
   }, [menuOpen]);
 
   // cover fetch
+  // Fetch all media for this trip
   useEffect(() => {
+    const q = query(
+      collection(db, "trips", trip.id, "media"),
+      orderBy("createdAt", "desc")
+    );
     const unsub = onSnapshot(
-      query(
-        collection(db, "trips", trip.id, "media"),
-        orderBy("createdAt", "desc")
-      ),
+      q,
       (snap) => {
-        let chosen: MediaItem | null = null;
         const arr: MediaItem[] = [];
         snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
-        if (trip.coverMediaId) {
-          chosen = arr.find((m) => m.id === trip.coverMediaId) || null;
-        } else {
-          chosen = arr.find((m) => m.type === "image") || null;
-        }
-        setCover(chosen);
-      }
+        setAllMedia(arr);
+      },
+      () => setAllMedia([])
     );
     return () => unsub();
-  }, [trip.id, trip.coverMediaId]);
+  }, [trip.id]);
+
+  // Set current cover based on index
+  useEffect(() => {
+    if (allMedia.length === 0) {
+      setCover(null);
+      return;
+    }
+    const media = allMedia[currentIndex];
+    if (media) setCover(media);
+  }, [allMedia, currentIndex]);
+
+  // Set initial index based on coverMediaId
+  useEffect(() => {
+    if (!trip.coverMediaId || allMedia.length === 0) return;
+    const idx = allMedia.findIndex((m) => m.id === trip.coverMediaId);
+    if (idx !== -1) setCurrentIndex(idx);
+  }, [trip.coverMediaId, allMedia]);
+
+  function goToPrevious(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+  }
+
+  function goToNext(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (currentIndex < allMedia.length - 1) setCurrentIndex(currentIndex + 1);
+  }
 
   async function deleteTrip() {
     if (!confirm("Delete this entire trip? This cannot be undone.")) return;
@@ -184,18 +319,23 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
         style={{ overflow: "visible" }}
       >
         {/* cover with overlay content */}
-        <div className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden relative">
+        <div
+          ref={coverRef}
+          className="aspect-[16/9] w-full bg-haiti-800/5 overflow-hidden relative group rounded-t-2xl"
+        >
           {cover?.type === "image" ? (
             <img
               src={cover.downloadURL}
               alt={cover.caption || trip.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover select-none"
+              style={{ objectPosition: `${coverFocus.x}% ${coverFocus.y}%` }}
               draggable={false}
             />
           ) : cover?.type === "video" ? (
             <video
               src={cover.downloadURL}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover select-none"
+              style={{ objectPosition: `${coverFocus.x}% ${coverFocus.y}%` }}
               muted
               playsInline
             />
@@ -205,11 +345,27 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
             </div>
           )}
 
+          {/* Drag overlay (only when there is a media) */}
+          {(cover?.type === "image" || cover?.type === "video") && (
+            <div
+              className="absolute inset-0 cursor-grab"
+              onMouseDown={(e) => startDrag(e.clientX, e.clientY)}
+              onTouchStart={(e) => {
+                const t = e.touches[0];
+                if (t) startDrag(t.clientX, t.clientY);
+              }}
+              // prevent context-menu while dragging on long press
+              onContextMenu={(e) => {
+                if (draggingRef.current) e.preventDefault();
+              }}
+            />
+          )}
+
           {/* Dark gradient overlay at bottom */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none"></div>
 
           {/* Trip info overlay on image - only title and location */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+          <div className="absolute bottom-0 left-0 right-0 p-4 text-white pointer-events-none">
             <h3 className="text-lg font-semibold mb-1 line-clamp-1">
               {trip.name}
             </h3>
@@ -233,6 +389,46 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
               </span>
             </div>
           </div>
+
+          {/* Navigation arrows (show on hover when multiple media) */}
+          {allMedia.length > 1 && (
+            <>
+              {currentIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={goToPrevious}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                  aria-label="Previous image"
+                >
+                  ←
+                </button>
+              )}
+              {currentIndex < allMedia.length - 1 && (
+                <button
+                  type="button"
+                  onClick={goToNext}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                  aria-label="Next image"
+                >
+                  →
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Photo counter */}
+          {allMedia.length > 1 && (
+            <div className="pointer-events-none absolute top-2 left-2 text-xs px-2 py-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+              {currentIndex + 1} / {allMedia.length}
+            </div>
+          )}
+
+          {/* Drag hint */}
+          {(cover?.type === "image" || cover?.type === "video") && (
+            <div className="pointer-events-none absolute bottom-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white">
+              Drag to reposition
+            </div>
+          )}
         </div>
 
         {/* Content below image */}
@@ -500,7 +696,6 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           title="Destinations"
           tripId={trip.id}
           subcollection="destinations"
-          priceUnits={["Per Person", "Per Couple", "Per Group", "Total"]}
           extraLeft={[
             {
               key: "transportationType",
@@ -543,7 +738,6 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           title="Activities"
           tripId={trip.id}
           subcollection="activities"
-          priceUnits={["Per User", "Per Couple", "Per Group"]}
           onClose={() => setActivitiesOpen(false)}
         />
       )}
@@ -552,7 +746,6 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           title="Accommodations"
           tripId={trip.id}
           subcollection="accommodations"
-          priceUnits={["Per Night", "Total Stay"]}
           onClose={() => setAccommodationsOpen(false)}
         />
       )}
@@ -561,7 +754,6 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           title="Restaurants"
           tripId={trip.id}
           subcollection="restaurants"
-          priceUnits={["Per Person", "Per Couple"]}
           onClose={() => setRestaurantsOpen(false)}
         />
       )}

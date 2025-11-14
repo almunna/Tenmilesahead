@@ -60,8 +60,6 @@ type SimplePlace = {
   city?: string | null;
   state?: string | null;
   country: string;
-  price?: number | null;
-  priceUnit?: string | null;
   address?: string | null;
   phoneNumber?: string | null;
   websiteUrl?: string | null;
@@ -99,15 +97,15 @@ function PlaceCard({
     <div className="rounded-xl border border-border p-4 space-y-3">
       {/* Header: name + dates + location */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="font-semibold text-base">{item.name}</div>
-          <div className="text-sm text-muted-foreground">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-base break-words">{item.name}</div>
+          <div className="text-sm text-muted-foreground break-words">
             {fmtMDY(item.startDate)}
             {item.endDate ? ` → ${fmtMDY(item.endDate)}` : ""}
             {loc && ` • ${loc}`}
           </div>
         </div>
-        <button className="text-sm navlink" onClick={onViewPhotos}>
+        <button className="text-sm navlink whitespace-nowrap flex-shrink-0" onClick={onViewPhotos}>
           View Photos
         </button>
       </div>
@@ -123,12 +121,12 @@ function PlaceCard({
           )}
           {item.websiteUrl && (
             <div className="flex gap-2">
-              <span className="text-muted-foreground">Website:</span>
+              <span className="text-muted-foreground flex-shrink-0">Website:</span>
               <a
                 href={item.websiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="link"
+                className="link break-all"
               >
                 {item.websiteUrl}
               </a>
@@ -137,13 +135,6 @@ function PlaceCard({
         </div>
       )}
 
-      {/* Price */}
-      {item.price != null && (
-        <div className="text-sm">
-          <span className="text-muted-foreground">Price:</span> {item.price}{" "}
-          {item.priceUnit || ""}
-        </div>
-      )}
 
       {/* Star Ratings */}
       {(item.qualityRating != null ||
@@ -224,7 +215,7 @@ function PlaceCard({
       {item.notes && (
         <div className="text-sm">
           <div className="text-muted-foreground font-medium mb-1">Notes:</div>
-          <p className="whitespace-pre-wrap">{item.notes}</p>
+          <p className="whitespace-pre-wrap break-words">{item.notes}</p>
         </div>
       )}
 
@@ -232,7 +223,7 @@ function PlaceCard({
       {item.review && (
         <div className="text-sm">
           <div className="text-muted-foreground font-medium mb-1">Review:</div>
-          <p className="whitespace-pre-wrap">{item.review}</p>
+          <p className="whitespace-pre-wrap break-words">{item.review}</p>
         </div>
       )}
     </div>
@@ -305,6 +296,27 @@ function TripInner() {
   const dateRange = trip
     ? `${fmtMDY(trip.startDate)} → ${fmtMDY(trip.endDate)}`
     : "";
+
+  // Extract unique transportation and accommodation types
+  const uniqueTypes = useMemo(() => {
+    const transportationTypes = new Set<string>();
+    const accommodationTypes = new Set<string>();
+
+    // Check accommodations subcollection for both transportation and accommodation types
+    accommodations.forEach((acc) => {
+      if (acc.transportationType && typeof acc.transportationType === 'string') {
+        transportationTypes.add(acc.transportationType);
+      }
+      if (acc.accommodationType && typeof acc.accommodationType === 'string') {
+        accommodationTypes.add(acc.accommodationType);
+      }
+    });
+
+    return {
+      transportation: Array.from(transportationTypes),
+      accommodation: Array.from(accommodationTypes),
+    };
+  }, [accommodations]);
 
   // Keep cover position in sync with doc
   useEffect(() => {
@@ -584,34 +596,36 @@ function TripInner() {
             )}
 
             <div className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <h1 className="text-2xl font-semibold">{trip.name}</h1>
-                <div className="text-sm text-muted-foreground">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl font-semibold break-words">{trip.name}</h1>
+                <div className="text-sm text-muted-foreground break-words">
                   {locationStr}
                 </div>
                 <div className="text-sm text-foreground">{dateRange}</div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {trip.transportationType && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5">
-                      {trip.transportationType}
+                  {/* Transportation types first */}
+                  {uniqueTypes.transportation.map((type) => (
+                    <span key={`transport-${type}`} className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5">
+                      {type}
                     </span>
-                  )}
-                  {trip.accommodationType && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5">
-                      {trip.accommodationType}
+                  ))}
+                  {/* Accommodation types second */}
+                  {uniqueTypes.accommodation.map((type) => (
+                    <span key={`accommodation-${type}`} className="text-xs px-2 py-0.5 rounded-full bg-haiti-800/5">
+                      {type}
                     </span>
-                  )}
+                  ))}
                 </div>
 
                 {trip.specificAddress && (
-                  <div className="mt-2 text-xs text-muted-foreground">
+                  <div className="mt-2 text-xs text-muted-foreground break-words">
                     Address: {trip.specificAddress}
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button className="btn" onClick={() => setOpenFlip(true)}>
                   Open Flipbook
                 </button>
@@ -629,7 +643,7 @@ function TripInner() {
           {(trip.description || "").trim().length > 0 && (
             <div className="card">
               <h2 className="text-lg font-semibold mb-2">Description</h2>
-              <p className="text-foreground whitespace-pre-wrap">
+              <p className="text-foreground whitespace-pre-wrap break-words">
                 {trip.description}
               </p>
             </div>
@@ -732,15 +746,14 @@ function TripInner() {
       {!error && (
         <div className="card">
           <h2 className="text-xl font-semibold mb-3">Itinerary</h2>
-          <div className="rounded-xl border border-border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-xl border border-border overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
               <thead className="bg-surface">
                 <tr>
                   <th className="px-3 py-2 text-left">Type</th>
                   <th className="px-3 py-2 text-left">Name</th>
                   <th className="px-3 py-2 text-left">Dates</th>
                   <th className="px-3 py-2 text-left">Location</th>
-                  <th className="px-3 py-2 text-left">Price</th>
                   <th className="px-3 py-2 text-left">Actions</th>
                 </tr>
               </thead>
@@ -757,19 +770,14 @@ function TripInner() {
                     >
                       <td className="px-3 py-2">{row.kind}</td>
                       <td className="px-3 py-2">{d.name || "—"}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         {fmtMDY(d.startDate)}
                         {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
                       </td>
                       <td className="px-3 py-2">{loc || "—"}</td>
                       <td className="px-3 py-2">
-                        {d.price != null
-                          ? `${d.price} ${d.priceUnit || ""}`
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2">
                         <button
-                          className="text-xs navlink"
+                          className="text-xs navlink whitespace-nowrap"
                           onClick={() =>
                             setSelectedItem({
                               id: d.id!,
@@ -787,7 +795,7 @@ function TripInner() {
                 {itineraryRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={5}
                       className="px-3 py-4 text-center text-muted-foreground"
                     >
                       No entries yet.

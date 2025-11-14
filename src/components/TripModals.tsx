@@ -39,7 +39,7 @@ function fmtMDY(s?: string | number | null) {
 }
 
 /* ------------------------------ shell ------------------------------ */
-
+/* Visual-only: consistent overlay, rounded panel, sticky header/footer */
 export function ModalShell({
   title,
   children,
@@ -50,15 +50,32 @@ export function ModalShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3">
-      <div className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-background shadow-xl border border-border">
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur">
-          <div className="font-semibold">{title}</div>
-          <button className="btn" onClick={onClose}>
-            Close
-          </button>
+    <div
+      className="fixed inset-0 z-50 bg-black/60 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="
+          w-full max-w-full md:max-w-5xl
+          bg-surface text-foreground border border-border shadow-xl
+          md:rounded-xl flex flex-col max-h-[90vh]
+        "
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/70 border-b border-border">
+          <div className="px-4 md:px-6 py-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold">{title}</h3>
+            <button className="navlink" onClick={onClose} aria-label="Close">
+              Close
+            </button>
+          </div>
         </div>
-        <div className="p-4">{children}</div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -164,94 +181,156 @@ export function PhotosModal({
   }
 
   return (
-    <ModalShell title="Photos" onClose={onClose}>
-      <div className="space-y-3">
-        <input
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          onChange={onPick}
-        />
-        {files.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No media selected.
+    <div
+      className="fixed inset-0 z-40 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="
+          w-full max-w-full md:max-w-2xl lg:max-w-3xl
+          h-auto max-h-[80vh]
+          bg-surface text-foreground border border-border shadow-lg
+          md:rounded-xl
+          flex flex-col
+        "
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/70 border-b border-border">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+            <h3 className="text-lg font-semibold">Add Photos/Videos</h3>
+            <button className="navlink" onClick={onClose} aria-label="Close">
+              Close
+            </button>
           </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {files.map((f) => {
-              const k = fileKey(f);
-              const url = previews[k];
-              const isImage = f.type.startsWith("image/");
-              return (
-                <div key={k} className="card space-y-2">
-                  <div className="w-full h-56 rounded-xl overflow-hidden bg-haiti-800/5">
-                    {isImage ? (
-                      <img
-                        src={url}
-                        alt={f.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <video
-                        src={url}
-                        className="w-full h-full object-cover"
-                        controls
-                        preload="metadata"
-                      />
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      className={
-                        coverKey === k
-                          ? "text-sm text-green-600"
-                          : "text-sm link"
-                      }
-                      onClick={() => setCoverKey(k)}
-                    >
-                      {coverKey === k ? "✓ Cover" : "Set as cover"}
-                    </button>
-                    <button
-                      type="button"
-                      className="text-sm text-red-600"
-                      onClick={() =>
-                        setFiles((prev) => prev.filter((x) => fileKey(x) !== k))
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <div>
-                    <label className="label">Caption</label>
-                    <textarea
-                      className="input h-auto min-h-[44px]"
-                      rows={1}
-                      value={captions[k] || ""}
-                      onChange={(e) =>
-                        setCaptions((p) => ({ ...p, [k]: e.target.value }))
-                      }
-                    />
-                  </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
+          <div className="space-y-4">
+            {/* Picker block */}
+            <div>
+              <div className="label mb-2">Add Photos/Videos</div>
+              <div
+                className="rounded-[18px] p-6 text-center bg-[#f7fafd] border-2 border-dashed"
+                style={{ borderColor: "#c7d7e6" }}
+              >
+                <div className="text-[15px] font-semibold text-foreground">
+                  Drag &amp; drop photos/videos here
                 </div>
-              );
-            })}
+                <div className="text-xs text-muted-foreground my-1">or</div>
+
+                <label className="inline-block">
+                  <span className="px-4 py-2 rounded-xl shadow-sm bg-[#5eb9b3] hover:bg-[#4ea9a3] text-white cursor-pointer select-none">
+                    Choose files
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    onChange={onPick}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Grid */}
+            {files.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No media selected yet. Use the picker above.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {files.map((f) => {
+                  const k = fileKey(f);
+                  const url = previews[k];
+                  const isImage = f.type.startsWith("image/");
+                  return (
+                    <div key={k} className="card space-y-2">
+                      <div className="w-full h-44 sm:h-56 md:h-60 xl:h-72 rounded-xl overflow-hidden bg-haiti-800/5">
+                        {isImage ? (
+                          <img
+                            src={url}
+                            alt={f.name}
+                            className="w-full h-full object-cover"
+                            draggable={false}
+                          />
+                        ) : (
+                          <video
+                            src={url}
+                            className="w-full h-full object-cover"
+                            controls
+                            preload="metadata"
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          className={
+                            coverKey === k
+                              ? "text-sm text-green-600 cursor-default"
+                              : "text-sm link"
+                          }
+                          onClick={() => coverKey !== k && setCoverKey(k)}
+                          disabled={coverKey === k}
+                        >
+                          {coverKey === k ? "✓ Cover" : "Set as cover"}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-sm text-red-600"
+                          onClick={() =>
+                            setFiles((prev) => prev.filter((x) => fileKey(x) !== k))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div>
+                        <label className="label">Caption</label>
+                        <textarea
+                          className="input h-9 min-h-[2.25rem] resize-none"
+                          rows={1}
+                          placeholder="Add a caption…"
+                          value={captions[k] || ""}
+                          onChange={(e) =>
+                            setCaptions((p) => ({ ...p, [k]: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-        <div className="pt-2 flex justify-end gap-2">
-          <button className="navlink" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn"
-            onClick={save}
-            disabled={saving || files.length === 0}
-          >
-            {saving ? "Saving..." : "Save Photos"}
-          </button>
+        </div>
+
+        {/* Sticky footer */}
+        <div className="sticky bottom-0 z-10 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/70 border-t border-border">
+          <div className="px-4 md:px-6 py-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <button
+              className="btn w-full sm:w-auto"
+              onClick={save}
+              disabled={saving || files.length === 0}
+            >
+              {saving ? "Saving…" : "Save Photos"}
+            </button>
+            <button
+              className="navlink w-full sm:w-auto"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </ModalShell>
+    </div>
   );
 }
 
@@ -326,77 +405,101 @@ export function ItineraryModal({
 
   return (
     <>
-      <ModalShell title="Itinerary (chronological summary)" onClose={onClose}>
-        <div className="text-sm text-muted-foreground mb-3">
-          Click any entry to view its details and photos in a flipbook.
-        </div>
-        <div className="rounded-xl border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-surface">
-              <tr>
-                <th className="px-3 py-2 text-left">Type</th>
-                <th className="px-3 py-2 text-left">Name</th>
-                <th className="px-3 py-2 text-left">Dates</th>
-                <th className="px-3 py-2 text-left">Location</th>
-                <th className="px-3 py-2 text-left">Price</th>
-                <th className="px-3 py-2 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((row, i) => {
-                const d = row.data;
-                return (
-                  <tr
-                    key={i}
-                    className="border-t border-border hover:bg-surface/50"
-                  >
-                    <td className="px-3 py-2">{row.kind}</td>
-                    <td className="px-3 py-2">{d.name || "—"}</td>
-                    <td className="px-3 py-2">
-                      {fmtMDY(d.startDate)}
-                      {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
-                    </td>
-                    <td className="px-3 py-2">
-                      {[d.address, d.city, d.state, d.country]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      {d.price != null
-                        ? `${d.price} ${d.priceUnit || ""}`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        className="text-xs navlink"
-                        onClick={() =>
-                          setSelectedItem({
-                            id: d.id,
-                            name: d.name,
-                            subcollection: row.subcollection,
-                          })
-                        }
-                      >
-                        View Photos
-                      </button>
-                    </td>
+      <div
+        className="fixed inset-0 z-40 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          className="
+            w-full max-w-full md:max-w-2xl lg:max-w-3xl
+            h-auto max-h-[80vh]
+            bg-surface text-foreground border border-border shadow-lg
+            md:rounded-xl
+            flex flex-col
+          "
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Sticky header */}
+          <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/70 border-b border-border">
+            <div className="flex items-center justify-between px-4 md:px-6 py-3">
+              <h3 className="text-lg font-semibold">Itinerary (chronological summary)</h3>
+              <button className="navlink" onClick={onClose} aria-label="Close">
+                Close
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable body */}
+          <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
+            <div className="text-sm text-muted-foreground mb-3">
+              Click any entry to view its details and photos in a flipbook.
+            </div>
+
+            <div className="rounded-xl border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-surface">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Type</th>
+                    <th className="px-3 py-2 text-left">Name</th>
+                    <th className="px-3 py-2 text-left">Dates</th>
+                    <th className="px-3 py-2 text-left">Location</th>
+                    <th className="px-3 py-2 text-left">Actions</th>
                   </tr>
-                );
-              })}
-              {items.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-3 py-4 text-center text-muted-foreground"
-                  >
-                    No entries yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {items.map((row, i) => {
+                    const d = row.data;
+                    return (
+                      <tr
+                        key={i}
+                        className="border-t border-border hover:bg-surface/50"
+                      >
+                        <td className="px-3 py-2">{row.kind}</td>
+                        <td className="px-3 py-2">{d.name || "—"}</td>
+                        <td className="px-3 py-2">
+                          {fmtMDY(d.startDate)}
+                          {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                        </td>
+                        <td className="px-3 py-2">
+                          {[d.address, d.city, d.state, d.country]
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            className="text-xs navlink"
+                            onClick={() =>
+                              setSelectedItem({
+                                id: d.id,
+                                name: d.name,
+                                subcollection: row.subcollection,
+                              })
+                            }
+                          >
+                            View Photos
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {items.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-3 py-4 text-center text-muted-foreground"
+                      >
+                        No entries yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </ModalShell>
+      </div>
 
       {selectedItem && (
         <ItemFlipbook
@@ -421,20 +524,30 @@ type SimplePlace = {
   city?: string | null;
   state?: string | null;
   country: string;
-  price?: number | null;
-  priceUnit?: string | null;
   address?: string | null;
+  phoneNumber?: string | null;
   createdAt?: number;
   updatedAt?: number;
-  // dynamic extras okay
   [key: string]: any;
 };
+
+// format to "(555) 456-7890" as you type (max 10 digits: 3 + 3 + 4)
+function formatPhoneUS(input: string): string {
+  const digits = (input || "").replace(/\D+/g, "").slice(0, 10);
+  const a = digits.slice(0, 3);  // area code
+  const b = digits.slice(3, 6);  // first 3 digits
+  const c = digits.slice(6, 10); // last 4 digits
+
+  if (!a) return "";
+  if (!b) return `(${a}`;
+  if (!c) return `(${a}) ${b}`;
+  return `(${a}) ${b}-${c}`;
+}
 
 export function PlaceModal({
   title,
   tripId,
   subcollection,
-  priceUnits,
   extraLeft = [],
   extraRight = [],
   onClose,
@@ -446,7 +559,6 @@ export function PlaceModal({
     | "activities"
     | "accommodations"
     | "restaurants";
-  priceUnits: string[];
   extraLeft?: { key: string; label: string; options: string[] }[];
   extraRight?: { key: string; label: string; options: string[] }[];
   onClose: () => void;
@@ -461,8 +573,7 @@ export function PlaceModal({
     city: "",
     state: "",
     country: "",
-    price: null,
-    priceUnit: priceUnits[0],
+    phoneNumber: "",
   });
   const [itemFlipbookOpen, setItemFlipbookOpen] = useState<{
     id: string;
@@ -501,7 +612,7 @@ export function PlaceModal({
     );
     const unsub = onSnapshot(qx, (snap) => {
       const arr: (SimplePlace & { id: string })[] = [];
-      snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+      snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) })); // visual only
       setRows(arr);
     });
     return () => unsub();
@@ -588,8 +699,7 @@ export function PlaceModal({
       city: "",
       state: "",
       country: "",
-      price: null,
-      priceUnit: priceUnits[0],
+      phoneNumber: "",
     });
     setFiles([]);
     setEditingId(null);
@@ -605,8 +715,7 @@ export function PlaceModal({
       city: r.city || "",
       state: r.state || "",
       country: r.country || "",
-      price: r.price ?? null,
-      priceUnit: r.priceUnit || priceUnits[0],
+      phoneNumber: r.phoneNumber || "",
       ...extraLeft.reduce(
         (acc, ex) => ({ ...acc, [ex.key]: (r as any)[ex.key] || "" }),
         {}
@@ -623,9 +732,37 @@ export function PlaceModal({
   }
 
   return (
-    <ModalShell title={title} onClose={onClose}>
-      <div className="rounded-xl border border-border p-3">
-        <div className="grid md:grid-cols-2 gap-3">
+    <div
+      className="fixed inset-0 z-40 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="
+          w-full max-w-full md:max-w-2xl lg:max-w-3xl
+          h-auto max-h-[80vh]
+          bg-surface text-foreground border border-border shadow-lg
+          md:rounded-xl
+          flex flex-col
+        "
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/70 border-b border-border">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+            <h3 className="text-lg font-semibold">{title}</h3>
+            <button className="navlink" onClick={onClose} aria-label="Close">
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
+          <div className="rounded-xl border border-border p-3">
+            <div className="grid md:grid-cols-2 gap-3">
+          {/* Left column */}
           <div className="space-y-2">
             <div>
               <label className="label">Name *</label>
@@ -635,6 +772,7 @@ export function PlaceModal({
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="label">Start Date</label>
@@ -659,6 +797,7 @@ export function PlaceModal({
                 />
               </div>
             </div>
+
             <div>
               <label className="label">Address</label>
               <input
@@ -689,6 +828,7 @@ export function PlaceModal({
             ))}
           </div>
 
+          {/* Right column */}
           <div className="space-y-2">
             <div>
               <label className="label">City *</label>
@@ -721,38 +861,22 @@ export function PlaceModal({
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-[1fr_minmax(120px,160px)] gap-2">
-              <div>
-                <label className="label">Price</label>
-                <input
-                  className="input"
-                  type="number"
-                  inputMode="decimal"
-                  value={form.price ?? ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      price: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">Unit</label>
-                <select
-                  className="input"
-                  value={form.priceUnit || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, priceUnit: e.target.value })
-                  }
-                >
-                  {priceUnits.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
-              </div>
+
+            {/* Phone (formats as (555) 456-7890) */}
+            <div>
+              <label className="label">Phone</label>
+              <input
+                className="input"
+                inputMode="tel"
+                placeholder="(555) 456-7890"
+                value={form.phoneNumber || ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    phoneNumber: formatPhoneUS(e.target.value),
+                  })
+                }
+              />
             </div>
 
             {extraRight.map((ex) => (
@@ -777,16 +901,34 @@ export function PlaceModal({
           </div>
         </div>
 
+        {/* Media picker block */}
         <div className="mt-3">
-          <label className="label">Photos / Videos</label>
-          <input
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            onChange={onPick}
-          />
+          <div className="label mb-2">Photos / Videos</div>
+          <div
+            className="rounded-[18px] p-6 text-center bg-[#f7fafd] border-2 border-dashed"
+            style={{ borderColor: "#c7d7e6" }}
+          >
+            <div className="text-[15px] font-semibold text-foreground">
+              Drag &amp; drop photos/videos here
+            </div>
+            <div className="text-xs text-muted-foreground my-1">or</div>
+
+            <label className="inline-block">
+              <span className="px-4 py-2 rounded-xl shadow-sm bg-[#5eb9b3] hover:bg-[#4ea9a3] text-white cursor-pointer select-none">
+                Choose files
+              </span>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={onPick}
+                className="sr-only"
+              />
+            </label>
+          </div>
+
           {files.length > 0 && (
-            <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {files.map((f) => {
                 const k = fileKey(f);
                 const url = previews[k];
@@ -831,81 +973,80 @@ export function PlaceModal({
           )}
         </div>
 
-        <div className="mt-3 flex justify-end gap-2">
-          {editingId && (
-            <button className="navlink" onClick={resetForm}>
-              Cancel Edit
-            </button>
-          )}
-          <button className="navlink" onClick={onClose}>
-            Close
-          </button>
-          <button className="btn" onClick={saveRow} disabled={!canSave()}>
-            {editingId ? "Update" : "Add"}
-          </button>
-        </div>
-      </div>
+            {/* Footer actions */}
+            <div className="mt-3 flex justify-end gap-2">
+              <button className="btn" onClick={saveRow} disabled={!canSave()}>
+                {editingId ? "Update" : "Add"}
+              </button>
+              {editingId && (
+                <button className="navlink" onClick={resetForm}>
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+          </div>
 
-      <div className="mt-4">
-        <h4 className="font-semibold mb-2">Added</h4>
-        <div className="space-y-2">
-          {rows.map((r) => (
-            <div key={r.id} className="rounded-xl border border-border p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="text-sm flex-1">
-                  <div className="font-medium">{r.name}</div>
-                  <div className="text-muted-foreground">
-                    {fmtMDY(r.startDate)}
-                    {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
-                    {[r.address, r.city, r.state, r.country]
-                      .filter(Boolean)
-                      .join(", ") || "—"}
-                    {r.price != null
-                      ? ` • ${r.price} ${r.priceUnit || ""}`
-                      : ""}
+          {/* Added list styled as cards */}
+          <div className="mt-4">
+            <h4 className="font-semibold mb-2">Added</h4>
+            <div className="space-y-2">
+              {rows.map((r) => (
+                <div key={r.id} className="card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-sm flex-1">
+                      <div className="font-medium">{r.name}</div>
+                      <div className="text-muted-foreground">
+                        {fmtMDY(r.startDate)}
+                        {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
+                        {[r.address, r.city, r.state, r.country]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                        {r.phoneNumber ? ` • ${r.phoneNumber}` : ""}{" "}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-sm navlink"
+                        onClick={() =>
+                          setItemFlipbookOpen({ id: r.id!, name: r.name })
+                        }
+                      >
+                        View
+                      </button>
+                      <button
+                        className="text-sm navlink"
+                        onClick={() => editRow(r)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="text-sm text-red-600"
+                        onClick={() => removeRow(r.id!)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="text-sm navlink"
-                    onClick={() =>
-                      setItemFlipbookOpen({ id: r.id!, name: r.name })
-                    }
-                  >
-                    View
-                  </button>
-                  <button
-                    className="text-sm navlink"
-                    onClick={() => editRow(r)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="text-sm text-red-600"
-                    onClick={() => removeRow(r.id!)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+              ))}
+              {rows.length === 0 && (
+                <div className="text-sm text-muted-foreground">No items yet.</div>
+              )}
             </div>
-          ))}
-          {rows.length === 0 && (
-            <div className="text-sm text-muted-foreground">No items yet.</div>
+          </div>
+
+          {itemFlipbookOpen && (
+            <ItemFlipbook
+              tripId={tripId}
+              linkedId={itemFlipbookOpen.id}
+              subcollection={subcollection}
+              itemName={itemFlipbookOpen.name}
+              onClose={() => setItemFlipbookOpen(null)}
+            />
           )}
         </div>
       </div>
-
-      {itemFlipbookOpen && (
-        <ItemFlipbook
-          tripId={tripId}
-          linkedId={itemFlipbookOpen.id}
-          subcollection={subcollection}
-          itemName={itemFlipbookOpen.name}
-          onClose={() => setItemFlipbookOpen(null)}
-        />
-      )}
-    </ModalShell>
+    </div>
   );
 }
 
@@ -965,64 +1106,65 @@ export function ItemFlipbook({
   }, [items.length]);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 text-white">
-        <div className="text-sm">
-          {itemName} — {items.length} item{items.length === 1 ? "" : "s"}
+    <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-3">
+      <div className="w-full max-w-5xl max-h-[90vh] bg-surface border border-border rounded-xl shadow-xl flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="text-sm">
+            {itemName} — {items.length} item{items.length === 1 ? "" : "s"}
+          </div>
+          <button className="navlink" onClick={onClose}>
+            Close
+          </button>
         </div>
-        <button
-          className="rounded-lg px-3 py-1 bg-white/10 hover:bg-white/20"
-          onClick={onClose}
-        >
-          Close
-        </button>
-      </div>
 
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
-        {items.length === 0 ? (
-          <div className="text-white/80">No media for this item yet</div>
-        ) : (
-          <div className="w-full h-full max-w-5xl flex items-center justify-center">
-            {items[index].type === "image" ? (
-              <img
-                src={items[index].downloadURL}
-                className="max-h-[80vh] max-w-full rounded-xl"
-                alt={items[index].caption || ""}
-                draggable={false}
-              />
-            ) : (
-              <video
-                src={items[index].downloadURL}
-                className="max-h-[80vh] max-w-full rounded-xl"
-                controls
-              />
-            )}
+        <div className="flex-1 flex items-center justify-center relative overflow-hidden p-3">
+          {items.length === 0 ? (
+            <div className="text-muted-foreground">
+              No media for this item yet
+            </div>
+          ) : (
+            <div className="w-full h-full max-w-5xl flex items-center justify-center">
+              {items[index].type === "image" ? (
+                <img
+                  src={items[index].downloadURL}
+                  className="max-h-[70vh] max-w-full rounded-lg"
+                  alt={items[index].caption || ""}
+                  draggable={false}
+                />
+              ) : (
+                <video
+                  src={items[index].downloadURL}
+                  className="max-h-[70vh] max-w-full rounded-lg"
+                  controls
+                />
+              )}
+            </div>
+          )}
+
+          {items.length > 1 && (
+            <>
+              <button
+                className="absolute left-4 top-1/2 -translate-y-1/2 btn"
+                onClick={prev}
+              >
+                ◀
+              </button>
+              <button
+                className="absolute right-4 top-1/2 -translate-y-1/2 btn"
+                onClick={next}
+              >
+                ▶
+              </button>
+            </>
+          )}
+        </div>
+
+        {items.length > 0 && (
+          <div className="px-4 py-3 border-t border-border text-center text-sm text-muted-foreground">
+            {items[index].caption || ""}
           </div>
         )}
-
-        {items.length > 1 && (
-          <>
-            <button
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2"
-              onClick={prev}
-            >
-              ◀
-            </button>
-            <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2"
-              onClick={next}
-            >
-              ▶
-            </button>
-          </>
-        )}
       </div>
-
-      {items.length > 0 && (
-        <div className="px-4 py-3 text-center text-white/80 text-sm">
-          {items[index].caption || ""}
-        </div>
-      )}
     </div>
   );
 }
@@ -1045,39 +1187,44 @@ export function ShareTripModal({
 
   return (
     <ModalShell title="Share Trip" onClose={onClose}>
-      <p className="text-sm">
-        Anyone with this link can view your flipbook—no account needed.
-      </p>
-      <div className="mt-3 flex gap-2">
-        <input
-          className="input flex-1"
-          readOnly
-          value={link}
-          onFocus={(e) => e.currentTarget.select()}
-        />
-        <button
-          className="btn"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(link);
-              alert("Copied.");
-            } catch {}
-          }}
-        >
-          Copy
-        </button>
-      </div>
-
-      <div className="mt-6 rounded-xl border border-border p-4 text-sm bg-haiti-800/5">
-        <div className="font-semibold mb-2">No account? No worries.</div>
-        <p>
-          But if you want the coolest photo journaling app ever invented— we’re
-          just sitting here looking cute, waiting for you to sign up. 😎
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Anyone with this link can view your flipbook—no account needed.
         </p>
-        <div className="mt-3">
-          <Link className="btn" href="/subscribe">
-            Subscribe
-          </Link>
+
+        <div className="rounded-xl border border-border p-3">
+          <div className="flex gap-2">
+            <input
+              className="input flex-1"
+              readOnly
+              value={link}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <button
+              className="btn"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(link);
+                  alert("Copied.");
+                } catch {}
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="font-semibold mb-1">No account? No worries.</div>
+          <p className="text-sm text-muted-foreground">
+            But if you want the coolest photo journaling app ever invented—we’re
+            just sitting here looking cute, waiting for you to sign up. 😎
+          </p>
+          <div className="mt-3">
+            <Link className="btn" href="/subscribe">
+              Subscribe
+            </Link>
+          </div>
         </div>
       </div>
     </ModalShell>

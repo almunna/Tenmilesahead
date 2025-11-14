@@ -48,18 +48,6 @@ const TRANSPORT_OPTIONS = [
   "Other",
 ];
 
-const ACCOMMODATION_OPTIONS = [
-  "Apartment / Airbnb",
-  "Camping",
-  "Cruise",
-  "Friend/Family",
-  "Guesthouse",
-  "Hostel",
-  "Hotel",
-  "Resort",
-  "Other",
-];
-
 export default function AddTripModal({
   onClose,
   onCreated,
@@ -78,8 +66,6 @@ export default function AddTripModal({
     state: "",
     country: "",
     transportationType: "",
-    accommodationType: "",
-    specificAddress: "",
     startDate: "",
     endDate: "",
     description: "",
@@ -266,8 +252,8 @@ export default function AddTripModal({
         state: f.state || null,
         country: f.country,
         transportationType: f.transportationType,
-        accommodationType: f.accommodationType,
-        specificAddress: f.specificAddress || null,
+        accommodationType: null,
+        specificAddress: null,
         startDate: f.startDate,
         endDate: f.endDate,
         description: f.description || null,
@@ -466,38 +452,6 @@ export default function AddTripModal({
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Accommodation */}
-            <div>
-              <label className="label">Accommodation Type</label>
-              <select
-                className="input"
-                value={f.accommodationType}
-                onChange={(e) =>
-                  setF({ ...f, accommodationType: e.target.value })
-                }
-              >
-                <option value="">Select accommodation</option>
-                {ACCOMMODATION_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Specific Address */}
-            <div className="md:col-span-3">
-              <label className="label">Specific Address</label>
-              <input
-                className="input"
-                placeholder="e.g., Eiffel Tower"
-                value={f.specificAddress}
-                onChange={(e) =>
-                  setF({ ...f, specificAddress: e.target.value })
-                }
-              />
             </div>
 
             {/* Dates */}

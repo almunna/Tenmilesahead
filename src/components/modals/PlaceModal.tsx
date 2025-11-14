@@ -19,7 +19,6 @@ import {
 } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
 import { COUNTRIES } from "@/lib/geo";
-import ModalShell from "./ModalShell";
 import ItemFlipbook from "./ItemFlipbook";
 
 type WithId<T> = T & { id: string };
@@ -32,8 +31,6 @@ type SimplePlace = {
   city?: string | null;
   state?: string | null;
   country: string;
-  price?: number | null;
-  priceUnit?: string | null;
   address?: string | null;
   phoneNumber?: string | null;
   websiteUrl?: string | null;
@@ -43,6 +40,7 @@ type SimplePlace = {
   valueRating?: number | null;
   serviceRating?: number | null;
   locationRating?: number | null;
+  accommodationType?: string | null;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -59,11 +57,23 @@ function fmtMDY(s?: string | number | null) {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+// format to "(555) 456-7890" as you type (max 10 digits: 3 + 3 + 4)
+function formatPhoneUS(input: string): string {
+  const digits = (input || "").replace(/\D+/g, "").slice(0, 10);
+  const a = digits.slice(0, 3); // area code
+  const b = digits.slice(3, 6); // first 3 digits
+  const c = digits.slice(6, 10); // last 4 digits
+
+  if (!a) return "";
+  if (!b) return `(${a}`;
+  if (!c) return `(${a}) ${b}`;
+  return `(${a}) ${b}-${c}`;
+}
+
 export default function PlaceModal({
   title,
   tripId,
   subcollection,
-  priceUnits,
   extraLeft = [],
   extraRight = [],
   onClose,
@@ -75,7 +85,6 @@ export default function PlaceModal({
     | "activities"
     | "accommodations"
     | "restaurants";
-  priceUnits: string[];
   extraLeft?: { key: string; label: string; options: string[] }[];
   extraRight?: { key: string; label: string; options: string[] }[];
   onClose: () => void;
@@ -90,8 +99,6 @@ export default function PlaceModal({
     city: "",
     state: "",
     country: "",
-    price: null,
-    priceUnit: priceUnits[0],
     phoneNumber: "",
     websiteUrl: "",
     notes: "",
@@ -100,6 +107,7 @@ export default function PlaceModal({
     valueRating: null,
     serviceRating: null,
     locationRating: null,
+    accommodationType: "",
   });
   const [itemFlipbookOpen, setItemFlipbookOpen] = useState<{
     id: string;
@@ -228,8 +236,6 @@ export default function PlaceModal({
       city: "",
       state: "",
       country: "",
-      price: null,
-      priceUnit: priceUnits[0],
       phoneNumber: "",
       websiteUrl: "",
       notes: "",
@@ -238,6 +244,7 @@ export default function PlaceModal({
       valueRating: null,
       serviceRating: null,
       locationRating: null,
+      accommodationType: "",
     });
     setFiles([]);
     setEditingId(null);
@@ -253,8 +260,6 @@ export default function PlaceModal({
       city: r.city || "",
       state: r.state || "",
       country: r.country || "",
-      price: r.price ?? null,
-      priceUnit: r.priceUnit || priceUnits[0],
       phoneNumber: r.phoneNumber || "",
       websiteUrl: r.websiteUrl || "",
       notes: r.notes || "",
@@ -263,6 +268,7 @@ export default function PlaceModal({
       valueRating: r.valueRating ?? null,
       serviceRating: r.serviceRating ?? null,
       locationRating: r.locationRating ?? null,
+      accommodationType: r.accommodationType || "",
       ...extraLeft.reduce(
         (acc, ex) => ({ ...acc, [ex.key]: (r as any)[ex.key] || "" }),
         {}
@@ -279,421 +285,481 @@ export default function PlaceModal({
   }
 
   return (
-    <ModalShell title={title} onClose={onClose}>
-      <div className="rounded-xl border border-border p-3">
-        <div className="grid md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <div>
-              <label className="label">Name *</label>
-              <input
-                className="input"
-                value={form.name || ""}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="label">Start Date</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.startDate || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, startDate: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="label">End Date</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.endDate || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, endDate: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <label className="label">Address</label>
-              <input
-                className="input"
-                value={form.address || ""}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
-            </div>
-
-            {extraLeft.map((ex) => (
-              <div key={ex.key}>
-                <label className="label">{ex.label}</label>
-                <select
-                  className="input"
-                  value={(form as any)[ex.key] || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, [ex.key]: e.target.value } as any)
-                  }
-                >
-                  <option value="">Select</option>
-                  {ex.options.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+    <div
+      className="fixed inset-0 z-40 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="
+          w-full max-w-full md:max-w-2xl lg:max-w-3xl
+          h-auto max-h-[80vh]
+          bg-surface text-foreground border border-border shadow-lg
+          md:rounded-xl
+          flex flex-col
+        "
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/70 border-b border-border">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+            <h3 className="text-lg font-semibold">{title}</h3>
+            <button className="navlink" onClick={onClose} aria-label="Close">
+              Close
+            </button>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <div>
-              <label className="label">City *</label>
-              <input
-                className="input"
-                value={form.city || ""}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">State / Province</label>
-              <input
-                className="input"
-                value={form.state || ""}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">Country *</label>
-              <select
-                className="input"
-                value={form.country || ""}
-                onChange={(e) => setForm({ ...form, country: e.target.value })}
-              >
-                <option value="">Select country</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
+        {/* Scrollable body */}
+        <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
+          <div className="rounded-xl border border-border p-3">
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div>
+                  <label className="label">Name *</label>
+                  <input
+                    className="input"
+                    value={form.name || ""}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">Start Date</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={form.startDate || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, startDate: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="label">End Date</label>
+                    <input
+                      type="date"
+                      className="input"
+                      value={form.endDate || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, endDate: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {subcollection === "accommodations" && (
+                  <div>
+                    <label className="label">Accommodation Type</label>
+                    <select
+                      className="input"
+                      value={(form as any).accommodationType || ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          accommodationType: e.target.value,
+                        } as any)
+                      }
+                    >
+                      <option value="">Select accommodation</option>
+                      <option value="Apartment / Airbnb">
+                        Apartment / Airbnb
+                      </option>
+                      <option value="Camping">Camping</option>
+                      <option value="Cruise">Cruise</option>
+                      <option value="Friend/Family">Friend/Family</option>
+                      <option value="Guesthouse">Guesthouse</option>
+                      <option value="Hostel">Hostel</option>
+                      <option value="Hotel">Hotel</option>
+                      <option value="Resort">Resort</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="label">Address</label>
+                  <input
+                    className="input"
+                    value={form.address || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </div>
+
+                {extraLeft.map((ex) => (
+                  <div key={ex.key}>
+                    <label className="label">{ex.label}</label>
+                    <select
+                      className="input"
+                      value={(form as any)[ex.key] || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, [ex.key]: e.target.value } as any)
+                      }
+                    >
+                      <option value="">Select</option>
+                      {ex.options.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 ))}
-              </select>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="label">City *</label>
+                  <input
+                    className="input"
+                    value={form.city || ""}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">State / Province</label>
+                  <input
+                    className="input"
+                    value={form.state || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, state: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Country *</label>
+                  <select
+                    className="input"
+                    value={form.country || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, country: e.target.value })
+                    }
+                  >
+                    <option value="">Select country</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {extraRight.map((ex) => (
+                  <div key={ex.key}>
+                    <label className="label">{ex.label}</label>
+                    <select
+                      className="input"
+                      value={(form as any)[ex.key] || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, [ex.key]: e.target.value } as any)
+                      }
+                    >
+                      <option value="">Select</option>
+                      {ex.options.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-[1fr_minmax(120px,160px)] gap-2">
+
+            {/* Additional Fields */}
+            <div className="mt-3 grid md:grid-cols-2 gap-3">
               <div>
-                <label className="label">Price</label>
+                <label className="label">Phone Number</label>
                 <input
                   className="input"
-                  type="number"
-                  inputMode="decimal"
-                  value={form.price ?? ""}
+                  type="tel"
+                  inputMode="tel"
+                  value={form.phoneNumber || ""}
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      price: e.target.value ? Number(e.target.value) : null,
+                      phoneNumber: formatPhoneUS(e.target.value),
                     })
                   }
+                  placeholder="(555) 123-4567"
                 />
               </div>
               <div>
-                <label className="label">Unit</label>
-                <select
+                <label className="label">Website URL</label>
+                <input
                   className="input"
-                  value={form.priceUnit || ""}
+                  type="url"
+                  value={form.websiteUrl || ""}
                   onChange={(e) =>
-                    setForm({ ...form, priceUnit: e.target.value })
+                    setForm({ ...form, websiteUrl: e.target.value })
                   }
-                >
-                  {priceUnits.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="https://example.com"
+                />
               </div>
             </div>
 
-            {extraRight.map((ex) => (
-              <div key={ex.key}>
-                <label className="label">{ex.label}</label>
-                <select
-                  className="input"
-                  value={(form as any)[ex.key] || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, [ex.key]: e.target.value } as any)
-                  }
-                >
-                  <option value="">Select</option>
-                  {ex.options.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Additional Fields */}
-        <div className="mt-3 grid md:grid-cols-2 gap-3">
-          <div>
-            <label className="label">Phone Number</label>
-            <input
-              className="input"
-              type="tel"
-              value={form.phoneNumber || ""}
-              onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-              placeholder="(555) 123-4567"
-            />
-          </div>
-          <div>
-            <label className="label">Website URL</label>
-            <input
-              className="input"
-              type="url"
-              value={form.websiteUrl || ""}
-              onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
-              placeholder="https://example.com"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <label className="label">Notes</label>
-          <textarea
-            className="input h-auto min-h-[80px]"
-            value={form.notes || ""}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            placeholder="e.g., reservation details, opening hours"
-            rows={3}
-          />
-        </div>
-
-        <div className="mt-3">
-          <label className="label">Your Review</label>
-          <textarea
-            className="input h-auto min-h-[80px]"
-            value={form.review || ""}
-            onChange={(e) => setForm({ ...form, review: e.target.value })}
-            placeholder="Share your experience..."
-            rows={3}
-          />
-        </div>
-
-        {/* Rating Section */}
-        <div className="mt-3">
-          <h3 className="font-semibold mb-3">Rate your experience</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Quality</label>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <button
-                    key={rating}
-                    type="button"
-                    className={`w-8 h-8 rounded transition-colors ${
-                      (form.qualityRating ?? 0) >= rating
-                        ? "text-yellow-500"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setForm({ ...form, qualityRating: rating })}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
+            <div className="mt-3">
+              <label className="label">Notes</label>
+              <textarea
+                className="input h-auto min-h-[80px]"
+                value={form.notes || ""}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="e.g., reservation details, opening hours"
+                rows={3}
+              />
             </div>
 
-            <div>
-              <label className="label">Value</label>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <button
-                    key={rating}
-                    type="button"
-                    className={`w-8 h-8 rounded transition-colors ${
-                      (form.valueRating ?? 0) >= rating
-                        ? "text-yellow-500"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setForm({ ...form, valueRating: rating })}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
+            <div className="mt-3">
+              <label className="label">Your Review</label>
+              <textarea
+                className="input h-auto min-h-[80px]"
+                value={form.review || ""}
+                onChange={(e) => setForm({ ...form, review: e.target.value })}
+                placeholder="Share your experience..."
+                rows={3}
+              />
             </div>
 
-            <div>
-              <label className="label">Service</label>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <button
-                    key={rating}
-                    type="button"
-                    className={`w-8 h-8 rounded transition-colors ${
-                      (form.serviceRating ?? 0) >= rating
-                        ? "text-yellow-500"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setForm({ ...form, serviceRating: rating })}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="label">Location</label>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <button
-                    key={rating}
-                    type="button"
-                    className={`w-8 h-8 rounded transition-colors ${
-                      (form.locationRating ?? 0) >= rating
-                        ? "text-yellow-500"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setForm({ ...form, locationRating: rating })}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <label className="label">Photos / Videos</label>
-          <input
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            onChange={onPick}
-          />
-          {files.length > 0 && (
-            <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {files.map((f) => {
-                const k = fileKey(f);
-                const url = previews[k];
-                const isImage = f.type.startsWith("image/");
-                return (
-                  <div
-                    key={k}
-                    className="rounded-xl overflow-hidden border border-border"
-                  >
-                    <div className="w-full h-48 bg-haiti-800/5">
-                      {isImage ? (
-                        <img
-                          src={url}
-                          alt={f.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <video
-                          src={url}
-                          className="w-full h-full object-cover"
-                          controls
-                          preload="metadata"
-                        />
-                      )}
-                    </div>
-                    <div className="p-2 text-right">
+            {/* Rating Section */}
+            <div className="mt-3">
+              <h3 className="font-semibold mb-3">Rate your experience</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Quality</label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((rating) => (
                       <button
-                        className="text-xs text-red-600"
+                        key={rating}
+                        type="button"
+                        className={`w-8 h-8 rounded transition-colors ${
+                          (form.qualityRating ?? 0) >= rating
+                            ? "text-yellow-500"
+                            : "text-gray-300"
+                        }`}
                         onClick={() =>
-                          setFiles((prev) =>
-                            prev.filter((x) => fileKey(x) !== k)
-                          )
+                          setForm({ ...form, qualityRating: rating })
                         }
                       >
-                        Remove
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Value</label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        className={`w-8 h-8 rounded transition-colors ${
+                          (form.valueRating ?? 0) >= rating
+                            ? "text-yellow-500"
+                            : "text-gray-300"
+                        }`}
+                        onClick={() =>
+                          setForm({ ...form, valueRating: rating })
+                        }
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Service</label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        className={`w-8 h-8 rounded transition-colors ${
+                          (form.serviceRating ?? 0) >= rating
+                            ? "text-yellow-500"
+                            : "text-gray-300"
+                        }`}
+                        onClick={() =>
+                          setForm({ ...form, serviceRating: rating })
+                        }
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Location</label>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        className={`w-8 h-8 rounded transition-colors ${
+                          (form.locationRating ?? 0) >= rating
+                            ? "text-yellow-500"
+                            : "text-gray-300"
+                        }`}
+                        onClick={() =>
+                          setForm({ ...form, locationRating: rating })
+                        }
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="label mb-2">Photos / Videos</div>
+              <div
+                className="rounded-[18px] p-6 text-center bg-[#f7fafd] border-2 border-dashed"
+                style={{ borderColor: "#c7d7e6" }}
+              >
+                <div className="text-[15px] font-semibold text-foreground">
+                  Drag &amp; drop photos/videos here
+                </div>
+                <div className="text-xs text-muted-foreground my-1">or</div>
+
+                <label className="inline-block">
+                  <span className="px-4 py-2 rounded-xl shadow-sm bg-[#5eb9b3] hover:bg-[#4ea9a3] text-white cursor-pointer select-none">
+                    Choose files
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    onChange={onPick}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+              {files.length > 0 && (
+                <div className="mt-2 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {files.map((f) => {
+                    const k = fileKey(f);
+                    const url = previews[k];
+                    const isImage = f.type.startsWith("image/");
+                    return (
+                      <div
+                        key={k}
+                        className="rounded-xl overflow-hidden border border-border"
+                      >
+                        <div className="w-full h-48 bg-haiti-800/5">
+                          {isImage ? (
+                            <img
+                              src={url}
+                              alt={f.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <video
+                              src={url}
+                              className="w-full h-full object-cover"
+                              controls
+                              preload="metadata"
+                            />
+                          )}
+                        </div>
+                        <div className="p-2 text-right">
+                          <button
+                            className="text-xs text-red-600"
+                            onClick={() =>
+                              setFiles((prev) =>
+                                prev.filter((x) => fileKey(x) !== k)
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 flex justify-end gap-2">
+              <button className="btn" onClick={saveRow} disabled={!canSave()}>
+                {editingId ? "Update" : "Add"}
+              </button>
+              {editingId && (
+                <button className="navlink" onClick={resetForm}>
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="font-semibold mb-2">Added</h4>
+            <div className="space-y-2">
+              {rows.map((r) => (
+                <div key={r.id} className="rounded-xl border border-border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-sm flex-1">
+                      <div className="font-medium">{r.name}</div>
+                      <div className="text-muted-foreground">
+                        {fmtMDY(r.startDate)}
+                        {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
+                        {[r.address, r.city, r.state, r.country]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-sm navlink"
+                        onClick={() =>
+                          setItemFlipbookOpen({ id: r.id!, name: r.name })
+                        }
+                      >
+                        View
+                      </button>
+                      <button
+                        className="text-sm navlink"
+                        onClick={() => editRow(r)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="text-sm text-red-600"
+                        onClick={() => removeRow(r.id!)}
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="mt-3 flex justify-end gap-2">
-          {editingId && (
-            <button className="navlink" onClick={resetForm}>
-              Cancel Edit
-            </button>
-          )}
-          <button className="navlink" onClick={onClose}>
-            Close
-          </button>
-          <button className="btn" onClick={saveRow} disabled={!canSave()}>
-            {editingId ? "Update" : "Add"}
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <h4 className="font-semibold mb-2">Added</h4>
-        <div className="space-y-2">
-          {rows.map((r) => (
-            <div key={r.id} className="rounded-xl border border-border p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="text-sm flex-1">
-                  <div className="font-medium">{r.name}</div>
-                  <div className="text-muted-foreground">
-                    {fmtMDY(r.startDate)}
-                    {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""} •{" "}
-                    {[r.address, r.city, r.state, r.country]
-                      .filter(Boolean)
-                      .join(", ") || "—"}
-                    {r.price != null
-                      ? ` • ${r.price} ${r.priceUnit || ""}`
-                      : ""}
-                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="text-sm navlink"
-                    onClick={() =>
-                      setItemFlipbookOpen({ id: r.id!, name: r.name })
-                    }
-                  >
-                    View
-                  </button>
-                  <button
-                    className="text-sm navlink"
-                    onClick={() => editRow(r)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="text-sm text-red-600"
-                    onClick={() => removeRow(r.id!)}
-                  >
-                    Delete
-                  </button>
+              ))}
+              {rows.length === 0 && (
+                <div className="text-sm text-muted-foreground">
+                  No items yet.
                 </div>
-              </div>
+              )}
             </div>
-          ))}
-          {rows.length === 0 && (
-            <div className="text-sm text-muted-foreground">No items yet.</div>
+          </div>
+
+          {/* Item-level Flipbook */}
+          {itemFlipbookOpen && (
+            <ItemFlipbook
+              tripId={tripId}
+              linkedId={itemFlipbookOpen.id}
+              subcollection={subcollection}
+              itemName={itemFlipbookOpen.name}
+              onClose={() => setItemFlipbookOpen(null)}
+            />
           )}
         </div>
       </div>
-
-      {/* Item-level Flipbook */}
-      {itemFlipbookOpen && (
-        <ItemFlipbook
-          tripId={tripId}
-          linkedId={itemFlipbookOpen.id}
-          subcollection={subcollection}
-          itemName={itemFlipbookOpen.name}
-          onClose={() => setItemFlipbookOpen(null)}
-        />
-      )}
-    </ModalShell>
+    </div>
   );
 }
