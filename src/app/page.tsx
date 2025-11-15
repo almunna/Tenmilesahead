@@ -415,22 +415,25 @@ function HomeInner() {
 
   // Display name editor (animates up then hides after successful save)
   const [username, setUsername] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
   const [usernameSaving, setUsernameSaving] = useState(false);
-  const [usernameSaved, setUsernameSaved] = useState(false);
   const [usernameAnimating, setUsernameAnimating] = useState(false);
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const uref = doc(db, "users", user.uid);
     const unsub = onSnapshot(uref, (snap) => {
       const d = snap.data() as any;
-      setUsername(d?.username || "");
+      const savedUsername = d?.username || "";
+      setUsername(savedUsername);
+      setUsernameInput(savedUsername);
     });
     return () => unsub();
   }, [user]);
 
   async function saveUsername() {
-    if (!user || !username.trim()) return;
+    if (!user || !usernameInput.trim()) return;
     setUsernameSaving(true);
     try {
       await setDoc(
@@ -438,15 +441,19 @@ function HomeInner() {
         {
           uid: user.uid,
           email: user.email || null,
-          username: username.trim(),
+          username: usernameInput.trim(),
           updatedAt: Date.now(),
           createdAt: serverTimestamp(),
         },
         { merge: true }
       );
-      // Trigger small slide-up fade, then remove the section
-      setUsernameAnimating(true);
-      setTimeout(() => setUsernameSaved(true), 380);
+      // If this was the initial setup, trigger slide-up animation
+      if (!username) {
+        setUsernameAnimating(true);
+      } else {
+        // If editing, just close the editor
+        setIsEditingUsername(false);
+      }
     } finally {
       setUsernameSaving(false);
     }
@@ -525,29 +532,62 @@ function HomeInner() {
   return (
     <main className="min-h-dvh relative z-10">
       <div className="container py-6 space-y-10">
-        {/* Username editor (slides up then hides) */}
-        {!usernameSaved && (
+        {/* Username editor - shows on first login OR when editing */}
+        {(!username || isEditingUsername) && (
           <section
             className={`card ${usernameAnimating ? "tma-slideUpOut" : ""}`}
           >
-            <h2 className="text-xl font-semibold">Your Display Name</h2>
-            <p className="text-muted-foreground text-sm mt-1">
-              This name is shown on your reviews. (Required)
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Your Display Name</h2>
+                <p className="text-muted-foreground text-sm mt-1">
+                  This name is shown on your reviews. (Required)
+                </p>
+              </div>
+              {isEditingUsername && (
+                <button
+                  className="navlink text-sm"
+                  onClick={() => {
+                    setIsEditingUsername(false);
+                    setUsernameInput(username); // Reset to saved value
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
             <div className="mt-4 flex flex-col sm:flex-row gap-3">
               <input
                 className="input flex-1"
-                placeholder="e.g., Williams’ Family Adventures"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="e.g., Williams' Family Adventures"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
                 required
               />
               <button
                 className="btn"
                 onClick={saveUsername}
-                disabled={!username.trim() || usernameSaving}
+                disabled={!usernameInput.trim() || usernameSaving}
               >
                 {usernameSaving ? "Saving..." : "Save Name"}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Display name with edit button - shows when username is set and not editing */}
+        {username && !isEditingUsername && (
+          <section className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Display Name</h2>
+                <p className="text-muted-foreground text-sm mt-1">{username}</p>
+              </div>
+              <button
+                className="btn"
+                onClick={() => setIsEditingUsername(true)}
+              >
+                Edit
               </button>
             </div>
           </section>

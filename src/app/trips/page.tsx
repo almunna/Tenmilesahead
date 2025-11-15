@@ -240,7 +240,7 @@ function TripsInner() {
     const q = query(
       collection(db, "trips"),
       where("ownerId", "==", user.uid),
-      orderBy("createdAt", "asc")
+      orderBy("startDate", "desc")
     );
 
     const unsub = onSnapshot(
@@ -390,6 +390,61 @@ function TripsInner() {
 
   return (
     <div className="container py-10 space-y-8">
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Your Trips</h2>
+
+        {/* Skeleton / placeholder while trips subscription is deferred or loading */}
+        {!shouldLoadTrips || !tripsLoaded ? (
+          <div
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            aria-busy="true"
+          >
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="rounded-2xl bg-[#2a3544] overflow-hidden animate-pulse"
+              >
+                <div className="aspect-[16/9] w-full bg-white/10" />
+                <div className="p-4 space-y-3">
+                  <div className="h-4 w-2/3 bg-white/10 rounded" />
+                  <div className="h-4 w-1/3 bg-white/10 rounded" />
+                  <div className="flex gap-2">
+                    <div className="h-9 w-24 bg-white/10 rounded-lg" />
+                    <div className="h-9 w-9 bg-white/10 rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {trips.map((t) => (
+              <TripCard
+                key={t.id}
+                trip={t}
+                locationOf={locationOf}
+                dateRangeOf={dateRangeOf}
+                setMenuOpenId={setMenuOpenId}
+                menuOpenId={menuOpenId}
+                setPhotosFor={setPhotosFor}
+                setItineraryFor={setItineraryFor}
+                setDestinationsFor={setDestinationsFor}
+                setActivitiesFor={setActivitiesFor}
+                setAccommodationsFor={setAccommodationsFor}
+                setRestaurantsFor={setRestaurantsFor}
+                setShareFor={setShareFor}
+                setEditingTrip={setEditingTrip}
+                deleteTrip={deleteTrip}
+              />
+            ))}
+
+            {trips.length === 0 && (
+              <div className="text-muted-foreground">No trips yet.</div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <h1 className="text-2xl font-semibold mb-4">Add New Trip</h1>
 
@@ -475,43 +530,44 @@ function TripsInner() {
             />
           </div>
 
-          {/* Mode of Transportation */}
-          <div>
-            <label className="label">Mode of Transportation *</label>
-            <select
-              className="input"
-              value={form.transportationType}
-              onChange={(e) =>
-                setForm({ ...form, transportationType: e.target.value })
-              }
-              required
-            >
-              <option value="">Select transportation</option>
-              {TRANSPORT_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Mode of Transportation and Accommodation Type - horizontal row */}
+          <div className="md:col-span-3 grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Mode of Transportation *</label>
+              <select
+                className="input"
+                value={form.transportationType}
+                onChange={(e) =>
+                  setForm({ ...form, transportationType: e.target.value })
+                }
+                required
+              >
+                <option value="">Select transportation</option>
+                {TRANSPORT_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Accommodation Type */}
-          <div>
-            <label className="label">Accommodation Type</label>
-            <select
-              className="input"
-              value={form.accommodationType}
-              onChange={(e) =>
-                setForm({ ...form, accommodationType: e.target.value })
-              }
-            >
-              <option value="">Select accommodation</option>
-              {ACCOMMODATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="label">Accommodation Type</label>
+              <select
+                className="input"
+                value={form.accommodationType}
+                onChange={(e) =>
+                  setForm({ ...form, accommodationType: e.target.value })
+                }
+              >
+                <option value="">Select accommodation</option>
+                {ACCOMMODATION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Specific Address */}
@@ -675,61 +731,6 @@ function TripsInner() {
             </button>
           </div>
         </form>
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Your Trips</h2>
-
-        {/* Skeleton / placeholder while trips subscription is deferred or loading */}
-        {!shouldLoadTrips || !tripsLoaded ? (
-          <div
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            aria-busy="true"
-          >
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className="rounded-2xl bg-[#2a3544] overflow-hidden animate-pulse"
-              >
-                <div className="aspect-[16/9] w-full bg-white/10" />
-                <div className="p-4 space-y-3">
-                  <div className="h-4 w-2/3 bg-white/10 rounded" />
-                  <div className="h-4 w-1/3 bg-white/10 rounded" />
-                  <div className="flex gap-2">
-                    <div className="h-9 w-24 bg-white/10 rounded-lg" />
-                    <div className="h-9 w-9 bg-white/10 rounded-lg" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {trips.map((t) => (
-              <TripCard
-                key={t.id}
-                trip={t}
-                locationOf={locationOf}
-                dateRangeOf={dateRangeOf}
-                setMenuOpenId={setMenuOpenId}
-                menuOpenId={menuOpenId}
-                setPhotosFor={setPhotosFor}
-                setItineraryFor={setItineraryFor}
-                setDestinationsFor={setDestinationsFor}
-                setActivitiesFor={setActivitiesFor}
-                setAccommodationsFor={setAccommodationsFor}
-                setRestaurantsFor={setRestaurantsFor}
-                setShareFor={setShareFor}
-                setEditingTrip={setEditingTrip}
-                deleteTrip={deleteTrip}
-              />
-            ))}
-
-            {trips.length === 0 && (
-              <div className="text-muted-foreground">No trips yet.</div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Edit modal */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   collection,
   doc,
@@ -18,7 +18,7 @@ import {
   getDownloadURL,
 } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
-import { COUNTRIES } from "@/lib/geo";
+import { COUNTRIES, getStates } from "@/lib/geo";
 import ItemFlipbook from "./ItemFlipbook";
 
 type WithId<T> = T & { id: string };
@@ -70,6 +70,20 @@ function formatPhoneUS(input: string): string {
   return `(${a}) ${b}-${c}`;
 }
 
+/** A→Z sort with "Other/Others/—/N/A/None/-" pinned to the end */
+const isOtherish = (s: string) => {
+  const t = s.trim().toLowerCase();
+  return t === "other" || t === "others" || t === "—" || t === "-" || t === "n/a" || t === "none";
+};
+const sortAZWithOtherLast = (
+  list: readonly string[] | string[] = []
+): string[] => {
+  const arr = [...list].sort((a, b) => a.localeCompare(b));
+  const tail = arr.filter(isOtherish);
+  const head = arr.filter((x) => !isOtherish(x));
+  return [...head, ...tail];
+};
+
 export default function PlaceModal({
   title,
   tripId,
@@ -113,6 +127,11 @@ export default function PlaceModal({
     id: string;
     name: string;
   } | null>(null);
+
+  const availableStates = useMemo(
+    () => sortAZWithOtherLast(getStates(form.country)),
+    [form.country]
+  );
 
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -314,121 +333,19 @@ export default function PlaceModal({
         {/* Scrollable body */}
         <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
           <div className="rounded-xl border border-border p-3">
-            <div className="grid md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <div>
-                  <label className="label">Name *</label>
-                  <input
-                    className="input"
-                    value={form.name || ""}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="label">Start Date</label>
-                    <input
-                      type="date"
-                      className="input"
-                      value={form.startDate || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, startDate: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="label">End Date</label>
-                    <input
-                      type="date"
-                      className="input"
-                      value={form.endDate || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, endDate: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-
-                {subcollection === "accommodations" && (
-                  <div>
-                    <label className="label">Accommodation Type</label>
-                    <select
-                      className="input"
-                      value={(form as any).accommodationType || ""}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          accommodationType: e.target.value,
-                        } as any)
-                      }
-                    >
-                      <option value="">Select accommodation</option>
-                      <option value="Apartment / Airbnb">
-                        Apartment / Airbnb
-                      </option>
-                      <option value="Camping">Camping</option>
-                      <option value="Cruise">Cruise</option>
-                      <option value="Friend/Family">Friend/Family</option>
-                      <option value="Guesthouse">Guesthouse</option>
-                      <option value="Hostel">Hostel</option>
-                      <option value="Hotel">Hotel</option>
-                      <option value="Resort">Resort</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="label">Address</label>
-                  <input
-                    className="input"
-                    value={form.address || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, address: e.target.value })
-                    }
-                  />
-                </div>
-
-                {extraLeft.map((ex) => (
-                  <div key={ex.key}>
-                    <label className="label">{ex.label}</label>
-                    <select
-                      className="input"
-                      value={(form as any)[ex.key] || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, [ex.key]: e.target.value } as any)
-                      }
-                    >
-                      <option value="">Select</option>
-                      {ex.options.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
+            <div className="space-y-3">
+              {/* Name field - full width */}
+              <div>
+                <label className="label">Name *</label>
+                <input
+                  className="input"
+                  value={form.name || ""}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
               </div>
 
-              <div className="space-y-2">
-                <div>
-                  <label className="label">City *</label>
-                  <input
-                    className="input"
-                    value={form.city || ""}
-                    onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="label">State / Province</label>
-                  <input
-                    className="input"
-                    value={form.state || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, state: e.target.value })
-                    }
-                  />
-                </div>
+              {/* Country, State, City - horizontal row */}
+              <div className="grid md:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Country *</label>
                   <select
@@ -446,59 +363,189 @@ export default function PlaceModal({
                     ))}
                   </select>
                 </div>
-
-                {extraRight.map((ex) => (
-                  <div key={ex.key}>
-                    <label className="label">{ex.label}</label>
-                    <select
+                <div>
+                  <label className="label">State / Province / Island *</label>
+                  {availableStates.length ? (
+                    <>
+                      <select
+                        className="input"
+                        value={availableStates.includes(form.state || "") ? form.state : ""}
+                        onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      >
+                        <option value="">Select from list</option>
+                        {availableStates.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input mt-2"
+                        placeholder="Or enter manually (e.g., custom island)"
+                        value={availableStates.includes(form.state || "") ? "" : form.state || ""}
+                        onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      />
+                    </>
+                  ) : (
+                    <input
                       className="input"
-                      value={(form as any)[ex.key] || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, [ex.key]: e.target.value } as any)
-                      }
-                    >
-                      <option value="">Select</option>
-                      {ex.options.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
+                      placeholder="e.g., California, Bali, etc."
+                      value={form.state || ""}
+                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="label">City *</label>
+                  <input
+                    className="input"
+                    value={form.city || ""}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
               </div>
+
+              {/* Start Date and End Date - horizontal row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Start Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.startDate || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, startDate: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">End Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.endDate || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, endDate: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Address and Phone - horizontal row */}
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Address</label>
+                  <input
+                    className="input"
+                    value={form.address || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Phone</label>
+                  <input
+                    className="input"
+                    type="tel"
+                    inputMode="tel"
+                    value={form.phoneNumber || ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        phoneNumber: formatPhoneUS(e.target.value),
+                      })
+                    }
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+              </div>
+
+              {/* Accommodation Type and Extra fields - combined in one row */}
+              {(subcollection === "accommodations" || extraLeft.length > 0 || extraRight.length > 0) && (
+                <div className="grid md:grid-cols-2 gap-3">
+                  {subcollection === "accommodations" && (
+                    <div>
+                      <label className="label">Accommodation Type</label>
+                      <select
+                        className="input"
+                        value={(form as any).accommodationType || ""}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            accommodationType: e.target.value,
+                          } as any)
+                        }
+                      >
+                        <option value="">Select accommodation</option>
+                        <option value="Apartment / Airbnb">
+                          Apartment / Airbnb
+                        </option>
+                        <option value="Camping">Camping</option>
+                        <option value="Cruise">Cruise</option>
+                        <option value="Friend/Family">Friend/Family</option>
+                        <option value="Guesthouse">Guesthouse</option>
+                        <option value="Hostel">Hostel</option>
+                        <option value="Hotel">Hotel</option>
+                        <option value="Resort">Resort</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  )}
+                  {extraLeft.map((ex) => (
+                    <div key={ex.key}>
+                      <label className="label">{ex.label}</label>
+                      <select
+                        className="input"
+                        value={(form as any)[ex.key] || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, [ex.key]: e.target.value } as any)
+                        }
+                      >
+                        <option value="">Select</option>
+                        {ex.options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  {extraRight.map((ex) => (
+                    <div key={ex.key}>
+                      <label className="label">{ex.label}</label>
+                      <select
+                        className="input"
+                        value={(form as any)[ex.key] || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, [ex.key]: e.target.value } as any)
+                        }
+                      >
+                        <option value="">Select</option>
+                        {ex.options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Additional Fields */}
-            <div className="mt-3 grid md:grid-cols-2 gap-3">
-              <div>
-                <label className="label">Phone Number</label>
-                <input
-                  className="input"
-                  type="tel"
-                  inputMode="tel"
-                  value={form.phoneNumber || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      phoneNumber: formatPhoneUS(e.target.value),
-                    })
-                  }
-                  placeholder="(555) 123-4567"
-                />
-              </div>
-              <div>
-                <label className="label">Website URL</label>
-                <input
-                  className="input"
-                  type="url"
-                  value={form.websiteUrl || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, websiteUrl: e.target.value })
-                  }
-                  placeholder="https://example.com"
-                />
-              </div>
+            <div className="mt-3">
+              <label className="label">Website URL</label>
+              <input
+                className="input"
+                type="url"
+                value={form.websiteUrl || ""}
+                onChange={(e) =>
+                  setForm({ ...form, websiteUrl: e.target.value })
+                }
+                placeholder="https://example.com"
+              />
             </div>
 
             <div className="mt-3">

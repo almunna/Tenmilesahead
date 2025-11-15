@@ -22,7 +22,7 @@ import {
 import { db, storage, auth } from "@/lib/firebase";
 import type { MediaItem } from "@/lib/types";
 import Link from "next/link";
-import { COUNTRIES } from "@/lib/geo";
+import { COUNTRIES, getStates } from "@/lib/geo";
 
 /* --------------------------- shared helpers --------------------------- */
 
@@ -544,6 +544,20 @@ function formatPhoneUS(input: string): string {
   return `(${a}) ${b}-${c}`;
 }
 
+/** A→Z sort with "Other/Others/—/N/A/None/-" pinned to the end */
+const isOtherish = (s: string) => {
+  const t = s.trim().toLowerCase();
+  return t === "other" || t === "others" || t === "—" || t === "-" || t === "n/a" || t === "none";
+};
+const sortAZWithOtherLast = (
+  list: readonly string[] | string[] = []
+): string[] => {
+  const arr = [...list].sort((a, b) => a.localeCompare(b));
+  const tail = arr.filter(isOtherish);
+  const head = arr.filter((x) => !isOtherish(x));
+  return [...head, ...tail];
+};
+
 export function PlaceModal({
   title,
   tripId,
@@ -579,6 +593,11 @@ export function PlaceModal({
     id: string;
     name: string;
   } | null>(null);
+
+  const availableStates = useMemo(
+    () => sortAZWithOtherLast(getStates(form.country)),
+    [form.country]
+  );
 
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -761,145 +780,173 @@ export function PlaceModal({
         {/* Scrollable body */}
         <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
           <div className="rounded-xl border border-border p-3">
-            <div className="grid md:grid-cols-2 gap-3">
-          {/* Left column */}
-          <div className="space-y-2">
-            <div>
-              <label className="label">Name *</label>
-              <input
-                className="input"
-                value={form.name || ""}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3">
+              {/* Name field - full width */}
               <div>
-                <label className="label">Start Date</label>
+                <label className="label">Name *</label>
                 <input
-                  type="date"
                   className="input"
-                  value={form.startDate || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, startDate: e.target.value })
-                  }
+                  value={form.name || ""}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="label">End Date</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.endDate || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, endDate: e.target.value })
-                  }
-                />
+
+              {/* Country, State, City - horizontal row */}
+              <div className="grid md:grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Country *</label>
+                  <select
+                    className="input"
+                    value={form.country || ""}
+                    onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  >
+                    <option value="">Select country</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">State / Province / Island *</label>
+                  {availableStates.length ? (
+                    <>
+                      <select
+                        className="input"
+                        value={availableStates.includes(form.state || "") ? form.state : ""}
+                        onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      >
+                        <option value="">Select from list</option>
+                        {availableStates.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input mt-2"
+                        placeholder="Or enter manually (e.g., custom island)"
+                        value={availableStates.includes(form.state || "") ? "" : form.state || ""}
+                        onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      />
+                    </>
+                  ) : (
+                    <input
+                      className="input"
+                      placeholder="e.g., California, Bali, etc."
+                      value={form.state || ""}
+                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="label">City *</label>
+                  <input
+                    className="input"
+                    value={form.city || ""}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="label">Address</label>
-              <input
-                className="input"
-                value={form.address || ""}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
-            </div>
+              {/* Start Date and End Date - horizontal row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Start Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.startDate || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, startDate: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">End Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.endDate || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, endDate: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
 
-            {extraLeft.map((ex) => (
-              <div key={ex.key}>
-                <label className="label">{ex.label}</label>
-                <select
-                  className="input"
-                  value={(form as any)[ex.key] || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, [ex.key]: e.target.value } as any)
-                  }
-                >
-                  <option value="">Select</option>
-                  {ex.options.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
+              {/* Address and Phone - horizontal row */}
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Address</label>
+                  <input
+                    className="input"
+                    value={form.address || ""}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label">Phone</label>
+                  <input
+                    className="input"
+                    inputMode="tel"
+                    placeholder="(555) 456-7890"
+                    value={form.phoneNumber || ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        phoneNumber: formatPhoneUS(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Extra fields - combined in one row */}
+              {(extraLeft.length > 0 || extraRight.length > 0) && (
+                <div className="grid md:grid-cols-2 gap-3">
+                  {extraLeft.map((ex) => (
+                    <div key={ex.key}>
+                      <label className="label">{ex.label}</label>
+                      <select
+                        className="input"
+                        value={(form as any)[ex.key] || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, [ex.key]: e.target.value } as any)
+                        }
+                      >
+                        <option value="">Select</option>
+                        {ex.options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   ))}
-                </select>
-              </div>
-            ))}
-          </div>
-
-          {/* Right column */}
-          <div className="space-y-2">
-            <div>
-              <label className="label">City *</label>
-              <input
-                className="input"
-                value={form.city || ""}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">State / Province</label>
-              <input
-                className="input"
-                value={form.state || ""}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">Country *</label>
-              <select
-                className="input"
-                value={form.country || ""}
-                onChange={(e) => setForm({ ...form, country: e.target.value })}
-              >
-                <option value="">Select country</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Phone (formats as (555) 456-7890) */}
-            <div>
-              <label className="label">Phone</label>
-              <input
-                className="input"
-                inputMode="tel"
-                placeholder="(555) 456-7890"
-                value={form.phoneNumber || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    phoneNumber: formatPhoneUS(e.target.value),
-                  })
-                }
-              />
-            </div>
-
-            {extraRight.map((ex) => (
-              <div key={ex.key}>
-                <label className="label">{ex.label}</label>
-                <select
-                  className="input"
-                  value={(form as any)[ex.key] || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, [ex.key]: e.target.value } as any)
-                  }
-                >
-                  <option value="">Select</option>
-                  {ex.options.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
+                  {extraRight.map((ex) => (
+                    <div key={ex.key}>
+                      <label className="label">{ex.label}</label>
+                      <select
+                        className="input"
+                        value={(form as any)[ex.key] || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, [ex.key]: e.target.value } as any)
+                        }
+                      >
+                        <option value="">Select</option>
+                        {ex.options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   ))}
-                </select>
-              </div>
-            ))}
-          </div>
-        </div>
+                </div>
+              )}
+            </div>
 
         {/* Media picker block */}
         <div className="mt-3">

@@ -24,7 +24,7 @@ export default function ItemFlipbook({
   useEffect(() => {
     const q = query(
       collection(db, "trips", tripId, "media"),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "asc")
     );
     const unsub = onSnapshot(q, (snap) => {
       const arr: MediaItem[] = [];
