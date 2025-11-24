@@ -11,7 +11,8 @@
       "Bash(npx firebase deploy --only firestore:rules)",
       "Bash(firebase:*)",
       "Bash(npx firebase:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

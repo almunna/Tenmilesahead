@@ -632,7 +632,7 @@ function TripInner() {
                 <button className="btn" onClick={() => setOpenEdit(true)}>
                   Edit
                 </button>
-                <button
+                {/* <button
                   className="btn bg-[#5eb9b3] text-white hover:bg-[#4ea9a3]"
                   onClick={() => {
                     const photobookId = `photobook_${Date.now()}`;
@@ -640,7 +640,7 @@ function TripInner() {
                   }}
                 >
                   Create Photobook
-                </button>
+                </button> */}
                 <Link className="navlink" href="/trips">
                   Back
                 </Link>

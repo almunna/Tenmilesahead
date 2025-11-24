@@ -50,6 +50,7 @@ export type UserProfile = {
   email?: string | null;
   username: string; // required & editable
   photoURL?: string | null;
+  role?: "admin" | "user"; // optional role field for admin access
   createdAt: number;
   updatedAt: number;
 };

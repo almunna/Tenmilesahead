@@ -59,6 +59,11 @@ export default function Navbar() {
 
           {user ? (
             <>
+              {profile?.role === "admin" && (
+                <Link className="navlink text-orange-600 font-semibold" href="/admin">
+                  Admin
+                </Link>
+              )}
               <Link className="navlink" href="/profile">
                 @{profile?.username || "you"}
               </Link>
@@ -164,6 +169,11 @@ export default function Navbar() {
 
               {user ? (
                 <>
+                  {profile?.role === "admin" && (
+                    <Link className="navlink text-orange-600 font-semibold" href="/admin">
+                      Admin Dashboard
+                    </Link>
+                  )}
                   <Link className="navlink" href="/profile">
                     @{profile?.username || "you"}
                   </Link>
