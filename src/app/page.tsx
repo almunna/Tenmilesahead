@@ -476,11 +476,17 @@ function HomeInner() {
     return () => unsub();
   }, [user]);
 
-  // Aggregates for TravelOverview (unchanged logic)
-  const [photoCount, setPhotoCount] = useState(0);
-  const [visitedCountries, setVisitedCountries] = useState<string[]>([]);
-  const [visitedStates, setVisitedStates] = useState<string[]>([]);
-  const [visitedCities, setVisitedCities] = useState<string[]>([]);
+  // Aggregates for TravelOverview
+  const [travelStats, setTravelStats] = useState({
+    totalTrips: 0,
+    daysExplored: 0,
+    photosCaptured: 0,
+    countriesVisited: 0,
+    statesVisited: 0,
+    citiesVisited: 0,
+    transportationCounts: {} as Record<string, number>,
+    accommodationCounts: {} as Record<string, number>,
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -493,13 +499,37 @@ function HomeInner() {
       const sSet = new Set<string>();
       const citySet = new Set<string>();
       let imgTotal = 0;
+      let totalDays = 0;
+      const transportCounts: Record<string, number> = {};
+      const accommodationCounts: Record<string, number> = {};
 
       for (const docSnap of tSnap.docs) {
         const t = docSnap.data() as Trip;
+
+        // Calculate days for this trip
+        if (t.startDate && t.endDate) {
+          const start = new Date(t.startDate);
+          const end = new Date(t.endDate);
+          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          totalDays += days;
+        }
+
+        // Track locations
         if (t.country) cSet.add(t.country);
         if (t.state) sSet.add(t.state);
         if (t.city) citySet.add(`${t.city}|${t.country || ""}`);
 
+        // Track transportation
+        if (t.transportationType) {
+          transportCounts[t.transportationType] = (transportCounts[t.transportationType] || 0) + 1;
+        }
+
+        // Track accommodation
+        if (t.accommodationType) {
+          accommodationCounts[t.accommodationType] = (accommodationCounts[t.accommodationType] || 0) + 1;
+        }
+
+        // Destinations
         const destSnap = await getDocs(
           collection(db, "trips", docSnap.id, "destinations")
         );
@@ -510,6 +540,18 @@ function HomeInner() {
           if (x.city) citySet.add(`${x.city}|${x.country || ""}`);
         });
 
+        // Accommodations subcollection
+        const accomSnap = await getDocs(
+          collection(db, "trips", docSnap.id, "accommodations")
+        );
+        accomSnap.forEach((a) => {
+          const acc = a.data() as any;
+          if (acc.accommodationType) {
+            accommodationCounts[acc.accommodationType] = (accommodationCounts[acc.accommodationType] || 0) + 1;
+          }
+        });
+
+        // Media (photos)
         const mediaSnap = await getDocs(
           collection(db, "trips", docSnap.id, "media")
         );
@@ -519,10 +561,16 @@ function HomeInner() {
         });
       }
 
-      setVisitedCountries(Array.from(cSet));
-      setVisitedStates(Array.from(sSet));
-      setVisitedCities(Array.from(citySet).map((s) => s.split("|")[0]));
-      setPhotoCount(imgTotal);
+      setTravelStats({
+        totalTrips: tSnap.docs.length,
+        daysExplored: totalDays,
+        photosCaptured: imgTotal,
+        countriesVisited: cSet.size,
+        statesVisited: sSet.size,
+        citiesVisited: citySet.size,
+        transportationCounts: transportCounts,
+        accommodationCounts: accommodationCounts,
+      });
     })();
   }, [user, trips.length]);
 
@@ -600,12 +648,7 @@ function HomeInner() {
         <WorldMap trips={trips} onOpenFlip={(id) => setFlipTripId(id)} />
 
         {/* Travel Overview (moved to component) */}
-        <TravelOverview
-          photoCount={photoCount}
-          visitedCountries={visitedCountries}
-          visitedStates={visitedStates}
-          visitedCities={visitedCities}
-        />
+        <TravelOverview stats={travelStats} />
       </div>
 
       {/* Flipbook modal (unchanged) */}

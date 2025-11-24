@@ -24,8 +24,6 @@ service cloud.firestore {
           && isIsoDate(request.resource.data.endDate)
           && request.resource.data.startDate <= request.resource.data.endDate
           && request.resource.data.country is string && request.resource.data.country.size() > 0
-          && request.resource.data.transportationType is string
-          && request.resource.data.accommodationType is string
           && request.resource.data.createdAt is number
           && request.resource.data.updatedAt is number;
       }
@@ -39,9 +37,7 @@ service cloud.firestore {
           && isIsoDate(request.resource.data.startDate)
           && isIsoDate(request.resource.data.endDate)
           && request.resource.data.startDate <= request.resource.data.endDate
-          && request.resource.data.country is string
-          && request.resource.data.transportationType is string
-          && request.resource.data.accommodationType is string;
+          && request.resource.data.country is string;
       }
 
       allow create: if signedIn() && validTripCreate();
@@ -163,6 +159,37 @@ service cloud.firestore {
         // Public read for share links
         allow read:   if true;
         allow update: if isOwner(parentOwner()) && validSubitemData();
+        allow delete: if isOwner(parentOwner());
+      }
+
+      /* ---- photobooks subcollection ---- */
+      match /photobooks/{photobookId} {
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validPhotobookCreate() {
+          return request.resource.data.tripId == tripId
+            && request.resource.data.ownerId == request.auth.uid
+            && request.resource.data.title is string
+            && request.resource.data.pageSize is string
+            && request.resource.data.binding is string
+            && request.resource.data.pages is list
+            && request.resource.data.createdAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        function validPhotobookUpdate() {
+          return request.resource.data.tripId == resource.data.tripId
+            && request.resource.data.ownerId == resource.data.ownerId
+            && request.resource.data.createdAt == resource.data.createdAt
+            && request.resource.data.updatedAt is number
+            && request.resource.data.updatedAt >= resource.data.updatedAt;
+        }
+
+        allow create: if isOwner(parentOwner()) && validPhotobookCreate();
+        allow read:   if isOwner(parentOwner());
+        allow update: if isOwner(parentOwner()) && validPhotobookUpdate();
         allow delete: if isOwner(parentOwner());
       }
     }

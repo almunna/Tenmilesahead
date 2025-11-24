@@ -632,6 +632,15 @@ function TripInner() {
                 <button className="btn" onClick={() => setOpenEdit(true)}>
                   Edit
                 </button>
+                <button
+                  className="btn bg-[#5eb9b3] text-white hover:bg-[#4ea9a3]"
+                  onClick={() => {
+                    const photobookId = `photobook_${Date.now()}`;
+                    router.push(`/trips/${tripId}/photobook/${photobookId}`);
+                  }}
+                >
+                  Create Photobook
+                </button>
                 <Link className="navlink" href="/trips">
                   Back
                 </Link>

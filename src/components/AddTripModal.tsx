@@ -251,7 +251,7 @@ export default function AddTripModal({
         city: f.city,
         state: f.state || null,
         country: f.country,
-        transportationType: f.transportationType,
+        transportationType: f.transportationType || null,
         accommodationType: null,
         specificAddress: null,
         startDate: f.startDate,
@@ -261,6 +261,9 @@ export default function AddTripModal({
         createdAt: now,
         updatedAt: now,
       };
+
+      console.log("Creating trip with payload:", payload);
+      console.log("User UID:", user.uid);
 
       // 1) Create trip doc
       const tripRef = await addDoc(collection(db, "trips"), payload as any);
@@ -327,7 +330,7 @@ export default function AddTripModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      className="fixed inset-0 z-50 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

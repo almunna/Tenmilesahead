@@ -53,3 +53,109 @@ export type UserProfile = {
   createdAt: number;
   updatedAt: number;
 };
+
+// Photobook types
+export type PageSize = "8x11" | "8x10" | "7x10";
+export type BindingType = "looseleaf" | "hardcover";
+export type LayoutType =
+  | "single-full"
+  | "two-horizontal"
+  | "two-vertical"
+  | "three-mixed-left"
+  | "three-mixed-right"
+  | "four-grid"
+  | "six-collage"
+  | "blank";
+
+export type PhotoPosition = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+};
+
+export type PhotoCrop = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PagePhoto = {
+  mediaId: string;
+  slotIndex: number; // which slot in the layout (0, 1, 2, etc.)
+  position: PhotoPosition;
+  cropBox?: PhotoCrop | null;
+};
+
+export type TextBox = {
+  id: string;
+  text: string;
+  position: PhotoPosition;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+  align: "left" | "center" | "right";
+};
+
+export type PhotobookPage = {
+  pageNumber: number;
+  layoutId: LayoutType;
+  backgroundColor: string;
+  backgroundPattern?: string | null;
+  photos: PagePhoto[];
+  textBoxes: TextBox[];
+};
+
+export type Photobook = {
+  id?: string;
+  tripId: string;
+  ownerId: string;
+  title: string;
+  pageSize: PageSize;
+  binding: BindingType;
+  pages: PhotobookPage[];
+  createdAt: number;
+  updatedAt: number;
+};
+
+// Global Reviews types
+export type ReviewType = "Activities" | "Accommodations" | "Restaurants" | "Destinations";
+
+export type Review = {
+  id?: string;
+  tripId: string;
+  ownerId: string;
+  ownerName?: string;
+  type: ReviewType;
+
+  // Place details
+  placeName: string;
+  city: string;
+  state?: string | null;
+  country: string;
+  address?: string | null;
+
+  // Review content
+  ratings: {
+    overall?: number;
+    cleanliness?: number;
+    comfort?: number;
+    value?: number;
+    service?: number;
+    safety?: number;
+    organization?: number;
+    funFactor?: number;
+  };
+  notes?: string | null;
+
+  // Media
+  coverMediaId?: string | null;
+  mediaIds?: string[];
+
+  // Dates
+  visitDate?: string | null; // ISO date
+  createdAt: number;
+  updatedAt: number;
+};
