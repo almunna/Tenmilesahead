@@ -99,7 +99,6 @@ export default function ItineraryModal({
                 <th className="px-3 py-2 text-left">Name</th>
                 <th className="px-3 py-2 text-left">Dates</th>
                 <th className="px-3 py-2 text-left">Location</th>
-                <th className="px-3 py-2 text-left">Price</th>
                 <th className="px-3 py-2 text-left">Actions</th>
               </tr>
             </thead>
@@ -123,11 +122,6 @@ export default function ItineraryModal({
                         .join(", ") || "—"}
                     </td>
                     <td className="px-3 py-2">
-                      {d.price != null
-                        ? `${d.price} ${d.priceUnit || ""}`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2">
                       <button
                         className="text-xs navlink"
                         onClick={() =>
@@ -147,7 +141,7 @@ export default function ItineraryModal({
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={5}
                     className="px-3 py-4 text-center text-muted-foreground"
                   >
                     No entries yet.

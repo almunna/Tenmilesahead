@@ -107,7 +107,6 @@ function TripsInner() {
     transportationType: "",
     accommodationType: "",
     specificAddress: "",
-    totalMiles: "",
     startDate: "",
     endDate: "",
     description: "",
@@ -180,6 +179,23 @@ function TripsInner() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photosToAdd, selectedKeys.join("|")]);
+
+  // Close dropdown when clicking anywhere on the screen
+  useEffect(() => {
+    function handleClickOutside() {
+      if (menuOpenId !== null) {
+        setMenuOpenId(null);
+      }
+    }
+
+    if (menuOpenId !== null) {
+      document.addEventListener("click", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, [menuOpenId]);
 
   function setCaption(k: string, v: string) {
     setCaptions((prev) => ({ ...prev, [k]: v }));
@@ -278,7 +294,7 @@ function TripsInner() {
       transportationType: form.transportationType,
       accommodationType: form.accommodationType,
       specificAddress: form.specificAddress || null,
-      totalMiles: form.totalMiles ? parseFloat(form.totalMiles) : null,
+      totalMiles: null,
       startDate: form.startDate,
       endDate: form.endDate,
       description: form.description || null,
@@ -355,7 +371,6 @@ function TripsInner() {
       transportationType: "",
       accommodationType: "",
       specificAddress: "",
-      totalMiles: "",
       startDate: "",
       endDate: "",
       description: "",
@@ -664,20 +679,6 @@ function TripsInner() {
             </div>
           </div>
 
-          {/* Total Miles Traveled */}
-          <div className="md:col-span-3">
-            <label className="label">Total Miles Traveled</label>
-            <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="e.g., 250"
-              value={form.totalMiles}
-              onChange={(e) => setForm({ ...form, totalMiles: e.target.value })}
-            />
-          </div>
-
           {/* Specific Address */}
           <div className="md:col-span-3">
             <label className="label">Specific Address</label>
@@ -832,7 +833,6 @@ function TripsInner() {
                   transportationType: "",
                   accommodationType: "",
                   specificAddress: "",
-                  totalMiles: "",
                   startDate: "",
                   endDate: "",
                   description: "",

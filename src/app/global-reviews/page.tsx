@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where, doc, getDoc, deleteDoc, updateDoc, addDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Star, MapPin, Phone, Calendar, ChevronDown, Image as ImageIcon, Hotel } from "lucide-react";
+import { Star, MapPin, Phone, Calendar, ChevronDown, Image as ImageIcon, Hotel, X } from "lucide-react";
 import type { Review, ReviewType, MediaItem } from "@/lib/types";
 import Protected from "@/components/Protected";
+import { useAuth } from "@/components/AuthProvider";
 
 type ReviewWithMedia = Review & {
   mediaItems: MediaItem[];
@@ -21,6 +22,7 @@ type ReviewWithMedia = Review & {
   safety?: number;
   organization?: number;
   funFactor?: number;
+  ownerUsername?: string; // Journal name of the owner
 };
 
 type GroupedReview = {
@@ -34,6 +36,18 @@ type GroupedReview = {
   averageRating?: number;
 };
 
+// Helper function to format date strings without timezone conversion
+function formatDateString(dateStr: string): string {
+  // Parse YYYY-MM-DD format without timezone conversion
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${month}/${day}/${year}`;
+  }
+  // Fallback to default formatting
+  return new Date(dateStr).toLocaleDateString();
+}
+
 export default function GlobalReviewsPage() {
   return (
     <Protected>
@@ -43,6 +57,7 @@ export default function GlobalReviewsPage() {
 }
 
 function GlobalReviewsInner() {
+  const { user } = useAuth();
   const [allReviews, setAllReviews] = useState<ReviewWithMedia[]>([]);
   const [groupedReviews, setGroupedReviews] = useState<GroupedReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,8 +68,17 @@ function GlobalReviewsInner() {
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
 
+  // Pagination
+  const [visibleCount, setVisibleCount] = useState(10);
+
   // Selected review for detail view
   const [selectedGroup, setSelectedGroup] = useState<GroupedReview | null>(null);
+
+  // Edit modal state
+  const [editingReview, setEditingReview] = useState<ReviewWithMedia | null>(null);
+
+  // Add review modal state
+  const [addingReviewForPlace, setAddingReviewForPlace] = useState<{ placeName: string; city: string; country: string; type: ReviewType } | null>(null);
 
   // Load all reviews
   useEffect(() => {
@@ -71,27 +95,32 @@ function GlobalReviewsInner() {
       // Get all trips first
       const tripsSnapshot = await getDocs(collection(db, "trips"));
 
+      // Cache trip owners for ownership checks
+      const tripOwners = new Map<string, string>();
+
       for (const tripDoc of tripsSnapshot.docs) {
         const tripId = tripDoc.id;
+        const tripData = tripDoc.data();
+        tripOwners.set(tripId, tripData.ownerId || "");
 
         // Fetch destinations
         reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "destinations", "Destinations")
+          fetchReviewsFromSubcollection(tripId, "destinations", "Destinations", tripOwners.get(tripId))
         );
 
         // Fetch activities
         reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "activities", "Activities")
+          fetchReviewsFromSubcollection(tripId, "activities", "Activities", tripOwners.get(tripId))
         );
 
         // Fetch accommodations
         reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "accommodations", "Accommodations")
+          fetchReviewsFromSubcollection(tripId, "accommodations", "Accommodations", tripOwners.get(tripId))
         );
 
         // Fetch restaurants
         reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "restaurants", "Restaurants")
+          fetchReviewsFromSubcollection(tripId, "restaurants", "Restaurants", tripOwners.get(tripId))
         );
       }
 
@@ -110,13 +139,27 @@ function GlobalReviewsInner() {
   const fetchReviewsFromSubcollection = async (
     tripId: string,
     subcollection: string,
-    type: ReviewType
+    type: ReviewType,
+    ownerId?: string
   ): Promise<ReviewWithMedia[]> => {
     const snapshot = await getDocs(
       query(collection(db, "trips", tripId, subcollection), orderBy("createdAt", "desc"))
     );
 
     const reviews: ReviewWithMedia[] = [];
+
+    // Fetch the owner's username/journal name if we have an ownerId
+    let ownerUsername: string | undefined = undefined;
+    if (ownerId) {
+      try {
+        const userDoc = await getDoc(doc(db, "users", ownerId));
+        if (userDoc.exists()) {
+          ownerUsername = userDoc.data().username;
+        }
+      } catch (error) {
+        console.error("Error fetching username:", error);
+      }
+    }
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
@@ -138,7 +181,8 @@ function GlobalReviewsInner() {
       reviews.push({
         id: doc.id,
         tripId,
-        ownerId: data.ownerId || "",
+        ownerId: ownerId || "",
+        ownerUsername: ownerUsername,
         type,
         placeName: data.name || "Unnamed Place",
         city: data.city || "",
@@ -237,6 +281,78 @@ function GlobalReviewsInner() {
     return matchesLocation && matchesType;
   });
 
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(10);
+  }, [selectedLocation, selectedType]);
+
+  // Flatten filtered reviews to individual review cards for pagination
+  const allFilteredReviewCards = filteredReviews.flatMap((group) =>
+    group.reviews.map((review) => ({ group, review }))
+  );
+
+  // Get visible review cards based on pagination
+  const visibleReviewCards = allFilteredReviewCards.slice(0, visibleCount);
+
+  const hasMore = visibleCount < allFilteredReviewCards.length;
+
+  const handleDeleteReview = async (review: ReviewWithMedia) => {
+    if (!confirm(`Delete your review for "${review.placeName}"?`)) return;
+
+    try {
+      // Determine subcollection name based on review type
+      const subcollectionMap: Record<ReviewType, string> = {
+        "Destinations": "destinations",
+        "Activities": "activities",
+        "Accommodations": "accommodations",
+        "Restaurants": "restaurants",
+      };
+
+      const subcollection = subcollectionMap[review.type];
+      await deleteDoc(doc(db, "trips", review.tripId, subcollection, review.id!));
+
+      loadReviews(); // Reload reviews
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      alert("Failed to delete review. Please try again.");
+    }
+  };
+
+  const handleEditReview = (review: ReviewWithMedia) => {
+    setEditingReview(review);
+  };
+
+  const handleSaveEdit = async (updatedReview: ReviewWithMedia) => {
+    try {
+      const subcollectionMap: Record<ReviewType, string> = {
+        "Destinations": "destinations",
+        "Activities": "activities",
+        "Accommodations": "accommodations",
+        "Restaurants": "restaurants",
+      };
+
+      const subcollection = subcollectionMap[updatedReview.type];
+      const reviewRef = doc(db, "trips", updatedReview.tripId, subcollection, updatedReview.id!);
+
+      // Update the review document
+      await updateDoc(reviewRef, {
+        review: updatedReview.notes,
+        notes: updatedReview.notes,
+        qualityRating: updatedReview.ratings.cleanliness,
+        valueRating: updatedReview.ratings.value,
+        serviceRating: updatedReview.ratings.service,
+        locationRating: updatedReview.ratings.safety,
+        updatedAt: Date.now(),
+      });
+
+      setEditingReview(null);
+      loadReviews(); // Reload reviews
+    } catch (error) {
+      console.error("Error updating review:", error);
+      alert("Failed to update review. Please try again.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -252,14 +368,14 @@ function GlobalReviewsInner() {
       {/* Header */}
       <div className="bg-[#2c3e50] border-b border-white/10">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <Star className="w-7 h-7 text-[#f4a261]" fill="#f4a261" />
-              <h1 className="text-2xl font-bold text-white">Global Reviews</h1>
+              <Star className="w-6 h-6 sm:w-7 sm:h-7 text-[#f4a261]" fill="#f4a261" />
+              <h1 className="text-xl sm:text-2xl font-bold text-white">Global Reviews</h1>
             </div>
 
             {/* Filters */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
               {/* Location Filter */}
               <div className="relative">
                 <button
@@ -267,7 +383,7 @@ function GlobalReviewsInner() {
                     setShowLocationDropdown(!showLocationDropdown);
                     setShowTypeDropdown(false);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#3d5266] text-white rounded-lg hover:bg-[#4a5f77] transition-colors min-w-[200px] justify-between"
+                  className="flex items-center gap-2 px-4 py-2 bg-[#3d5266] text-white rounded-lg hover:bg-[#4a5f77] transition-colors w-full sm:min-w-[200px] justify-between"
                 >
                   <span className="text-sm">{selectedLocation}</span>
                   <ChevronDown className="w-4 h-4" />
@@ -307,7 +423,7 @@ function GlobalReviewsInner() {
                     setShowTypeDropdown(!showTypeDropdown);
                     setShowLocationDropdown(false);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#3d5266] text-white rounded-lg hover:bg-[#4a5f77] transition-colors min-w-[200px] justify-between"
+                  className="flex items-center gap-2 px-4 py-2 bg-[#3d5266] text-white rounded-lg hover:bg-[#4a5f77] transition-colors w-full sm:min-w-[200px] justify-between"
                 >
                   <span className="text-sm">{selectedType}</span>
                   <ChevronDown className="w-4 h-4" />
@@ -374,25 +490,44 @@ function GlobalReviewsInner() {
 
       {/* Reviews List */}
       <div className="container mx-auto px-4 py-8">
-        {filteredReviews.length === 0 ? (
+        {allFilteredReviewCards.length === 0 ? (
           <div className="text-center text-white/70 py-12">
             No reviews found matching your filters.
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredReviews.map((group, groupIndex) => (
-              <div key={`${group.placeName}-${group.city}-${groupIndex}`} className="space-y-4">
-                {group.reviews.map((review, reviewIndex) => (
-                  <ReviewCard
-                    key={`${review.id}-${reviewIndex}`}
-                    review={review}
-                    reviewCount={group.reviews.length}
-                    onClick={() => setSelectedGroup(group)}
-                  />
-                ))}
+          <>
+            <div className="space-y-4">
+              {visibleReviewCards.map(({ group, review }, index) => (
+                <ReviewCard
+                  key={`${review.id}-${index}`}
+                  review={review}
+                  reviewCount={group.reviews.length}
+                  currentUserId={user?.uid}
+                  onClick={() => setSelectedGroup(group)}
+                  onEdit={() => handleEditReview(review)}
+                  onDelete={() => handleDeleteReview(review)}
+                  onAddReview={() => setAddingReviewForPlace({
+                    placeName: review.placeName,
+                    city: review.city,
+                    country: review.country,
+                    type: review.type
+                  })}
+                />
+              ))}
+            </div>
+
+            {/* See More Button */}
+            {hasMore && (
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => setVisibleCount((prev) => prev + 5)}
+                  className="px-6 py-3 bg-[#66bfcc] text-white rounded-lg hover:bg-[#5aa8b5] transition-colors font-medium"
+                >
+                  See More ({allFilteredReviewCards.length - visibleCount} remaining)
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
@@ -403,6 +538,31 @@ function GlobalReviewsInner() {
           onClose={() => setSelectedGroup(null)}
         />
       )}
+
+      {/* Edit Review Modal */}
+      {editingReview && (
+        <EditReviewModal
+          review={editingReview}
+          onClose={() => setEditingReview(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
+
+      {/* Add Review Modal */}
+      {addingReviewForPlace && user && (
+        <AddReviewModal
+          placeName={addingReviewForPlace.placeName}
+          city={addingReviewForPlace.city}
+          country={addingReviewForPlace.country}
+          type={addingReviewForPlace.type}
+          userId={user.uid}
+          onClose={() => setAddingReviewForPlace(null)}
+          onSave={async () => {
+            setAddingReviewForPlace(null);
+            await loadReviews();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -410,11 +570,19 @@ function GlobalReviewsInner() {
 function ReviewCard({
   review,
   reviewCount,
+  currentUserId,
   onClick,
+  onEdit,
+  onDelete,
+  onAddReview,
 }: {
   review: ReviewWithMedia;
   reviewCount: number;
+  currentUserId?: string;
   onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onAddReview: () => void;
 }) {
   const renderStars = (rating: number) => {
     return [...Array(5)].map((_, i) => (
@@ -432,9 +600,9 @@ function ReviewCard({
       onClick={onClick}
       className="bg-[#3d5266] rounded-lg overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#66bfcc] transition-all"
     >
-      <div className="flex">
+      <div className="flex flex-col sm:flex-row">
         {/* Left: Cover Image */}
-        <div className="w-32 h-32 flex-shrink-0 bg-[#2c3e50] relative">
+        <div className="w-full h-48 sm:w-32 sm:h-32 flex-shrink-0 bg-[#2c3e50] relative">
           {review.mediaItems.length > 0 ? (
             <img
               src={review.mediaItems[0].downloadURL}
@@ -450,30 +618,46 @@ function ReviewCard({
 
         {/* Right: Content */}
         <div className="flex-1 p-4">
-          <div className="flex items-start justify-between mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2 gap-2">
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white mb-1">{review.placeName}</h3>
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-1">{review.placeName}</h3>
+
+              {/* Journal Name */}
+              {review.ownerUsername && (
+                <div className="text-sm text-[#66bfcc] font-medium mb-1">
+                  {review.ownerUsername}
+                </div>
+              )}
 
               <div className="flex items-center gap-2 text-sm text-white/70 mb-1">
-                <MapPin className="w-4 h-4" />
-                <span>
+                <MapPin className="w-4 h-4 flex-shrink-0" />
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                    review.address || `${review.placeName}, ${review.city}, ${review.state || review.country}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="truncate hover:text-[#66bfcc] hover:underline transition-colors"
+                  title="Open in Google Maps"
+                >
                   {review.address || `${review.city}, ${review.state || review.country}`}
-                </span>
+                </a>
               </div>
 
               {review.phone && (
                 <div className="flex items-center gap-2 text-sm text-white/70 mb-2">
-                  <Phone className="w-4 h-4" />
+                  <Phone className="w-4 h-4 flex-shrink-0" />
                   <span>{review.phone}</span>
                 </div>
               )}
 
               {review.notes && (
-                <p className="text-sm text-white/80 italic mb-3">"{review.notes}"</p>
+                <p className="text-sm text-white/80 italic mb-3 line-clamp-2">"{review.notes}"</p>
               )}
 
               {/* Ratings Grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
                 {review.cleanliness > 0 && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-white/90">Quality:</span>
@@ -501,12 +685,50 @@ function ReviewCard({
               </div>
             </div>
 
-            {/* Type Badge */}
-            <div className="flex flex-col items-end gap-2 ml-4">
+            {/* Type Badge and Actions */}
+            <div className="flex flex-row sm:flex-col items-start sm:items-end gap-2 sm:ml-4 flex-wrap">
               <div className="flex items-center gap-2 bg-[#2c3e50] px-3 py-1 rounded">
                 <Hotel className="w-4 h-4 text-white/70" />
                 <span className="text-xs text-white/90">{review.type}</span>
               </div>
+              {/* Show edit/delete buttons if current user owns this review */}
+              {currentUserId && review.ownerId === currentUserId && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit();
+                    }}
+                    className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+                    title="Edit this review"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition-colors whitespace-nowrap"
+                    title="Delete this review"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+              {/* Show "Add Your Review" button for all logged-in users */}
+              {currentUserId && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddReview();
+                  }}
+                  className="text-xs px-3 py-1.5 rounded bg-[#66bfcc] text-white hover:bg-[#5aa8b5] transition-colors font-medium whitespace-nowrap"
+                  title="Add your own review for this place"
+                >
+                  Add Your Review
+                </button>
+              )}
             </div>
           </div>
 
@@ -516,7 +738,7 @@ function ReviewCard({
               {review.visitDate && (
                 <>
                   <Calendar className="w-4 h-4" />
-                  <span>{new Date(review.visitDate).toLocaleDateString()}</span>
+                  <span>{formatDateString(review.visitDate)}</span>
                 </>
               )}
             </div>
@@ -547,12 +769,12 @@ function ReviewDetailModal({
   const hasMultipleReviews = group.reviews.length > 1;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/90 flex items-center justify-center p-2 sm:p-4">
       <div className="bg-[#2c3e50] rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-[#2c3e50] border-b border-white/10 p-6 flex items-center justify-between">
+        <div className="sticky top-0 bg-[#2c3e50] border-b border-white/10 p-4 sm:p-6 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white">{group.placeName}</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">{group.placeName}</h2>
             <div className="flex items-center gap-2 text-sm text-white/70 mt-1">
               <MapPin className="w-4 h-4" />
               <span>
@@ -628,7 +850,7 @@ function ReviewDetailModal({
           {currentReview.visitDate && (
             <div className="flex items-center gap-2 text-sm text-white/70 mb-4">
               <Calendar className="w-4 h-4" />
-              <span>Visited on {new Date(currentReview.visitDate).toLocaleDateString()}</span>
+              <span>Visited on {formatDateString(currentReview.visitDate)}</span>
             </div>
           )}
 
@@ -714,6 +936,360 @@ function ReviewDetailModal({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EditReviewModal({
+  review,
+  onClose,
+  onSave,
+}: {
+  review: ReviewWithMedia;
+  onClose: () => void;
+  onSave: (review: ReviewWithMedia) => Promise<void>;
+}) {
+  const [editedReview, setEditedReview] = useState<ReviewWithMedia>({ ...review });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSave(editedReview);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderStarRating = (value: number, onChange: (rating: number) => void, label: string) => {
+    return (
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-white">{label}</label>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <button
+              key={rating}
+              type="button"
+              onClick={() => onChange(rating)}
+              className="focus:outline-none"
+            >
+              <Star
+                className="w-6 h-6 cursor-pointer transition-colors"
+                fill={rating <= value ? "#f4a261" : "none"}
+                stroke={rating <= value ? "#f4a261" : "#888"}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/90 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-[#2c3e50] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-[#2c3e50] border-b border-white/10 p-4 sm:p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">Edit Review</h2>
+            <p className="text-sm text-white/70 mt-1">{review.placeName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Close"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* Review Notes */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white">Your Review</label>
+            <textarea
+              value={editedReview.notes || ""}
+              onChange={(e) =>
+                setEditedReview({ ...editedReview, notes: e.target.value })
+              }
+              className="w-full px-4 py-3 bg-[#3d5266] text-white rounded-lg border border-white/10 focus:border-[#66bfcc] focus:outline-none resize-none"
+              rows={5}
+              placeholder="Share your experience..."
+            />
+          </div>
+
+          {/* Ratings */}
+          <div className="space-y-4">
+            <h3 className="text-base sm:text-lg font-semibold text-white">Ratings</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderStarRating(
+                editedReview.ratings.cleanliness || 0,
+                (rating) =>
+                  setEditedReview({
+                    ...editedReview,
+                    ratings: { ...editedReview.ratings, cleanliness: rating },
+                  }),
+                "Quality"
+              )}
+
+              {renderStarRating(
+                editedReview.ratings.service || 0,
+                (rating) =>
+                  setEditedReview({
+                    ...editedReview,
+                    ratings: { ...editedReview.ratings, service: rating },
+                  }),
+                "Service"
+              )}
+
+              {renderStarRating(
+                editedReview.ratings.value || 0,
+                (rating) =>
+                  setEditedReview({
+                    ...editedReview,
+                    ratings: { ...editedReview.ratings, value: rating },
+                  }),
+                "Value"
+              )}
+
+              {renderStarRating(
+                editedReview.ratings.safety || 0,
+                (rating) =>
+                  setEditedReview({
+                    ...editedReview,
+                    ratings: { ...editedReview.ratings, safety: rating },
+                  }),
+                "Location"
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t border-white/10">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-[#66bfcc] text-white rounded-lg hover:bg-[#5aa8b5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AddReviewModal({
+  placeName,
+  city,
+  country,
+  type,
+  userId,
+  onClose,
+  onSave,
+}: {
+  placeName: string;
+  city: string;
+  country: string;
+  type: ReviewType;
+  userId: string;
+  onClose: () => void;
+  onSave: () => Promise<void>;
+}) {
+  const [notes, setNotes] = useState("");
+  const [visitDate, setVisitDate] = useState("");
+  const [qualityRating, setQualityRating] = useState(0);
+  const [serviceRating, setServiceRating] = useState(0);
+  const [valueRating, setValueRating] = useState(0);
+  const [locationRating, setLocationRating] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      // Find or create a trip for this user to store the review
+      const tripsSnapshot = await getDocs(
+        query(collection(db, "trips"), where("ownerId", "==", userId))
+      );
+
+      let tripId: string;
+
+      if (tripsSnapshot.empty) {
+        // Create a new trip for this user's reviews
+        const newTripRef = doc(collection(db, "trips"));
+        await setDoc(newTripRef, {
+          ownerId: userId,
+          name: "My Reviews",
+          country: country,
+          startDate: visitDate || new Date().toISOString().split("T")[0],
+          endDate: visitDate || new Date().toISOString().split("T")[0],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        tripId = newTripRef.id;
+      } else {
+        // Use the first existing trip (or we could find one matching the country)
+        let matchingTrip = null;
+        for (const tripDoc of tripsSnapshot.docs) {
+          const tripData = tripDoc.data();
+          if (tripData.country === country) {
+            matchingTrip = tripDoc;
+            break;
+          }
+        }
+
+        tripId = matchingTrip ? matchingTrip.id : tripsSnapshot.docs[0].id;
+      }
+
+      // Determine the subcollection based on review type
+      const subcollectionMap: Record<ReviewType, string> = {
+        "Destinations": "destinations",
+        "Activities": "activities",
+        "Accommodations": "accommodations",
+        "Restaurants": "restaurants",
+      };
+
+      const subcollection = subcollectionMap[type];
+
+      // Add the review to the appropriate subcollection
+      await addDoc(collection(db, "trips", tripId, subcollection), {
+        name: placeName,
+        city: city,
+        country: country,
+        review: notes,
+        notes: notes,
+        qualityRating: qualityRating,
+        serviceRating: serviceRating,
+        valueRating: valueRating,
+        locationRating: locationRating,
+        startDate: visitDate || null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      await onSave();
+    } catch (error) {
+      console.error("Error adding review:", error);
+      alert("Failed to add review. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderStarRating = (value: number, onChange: (rating: number) => void, label: string) => {
+    return (
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-white">{label}</label>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <button
+              key={rating}
+              type="button"
+              onClick={() => onChange(rating)}
+              className="focus:outline-none"
+            >
+              <Star
+                className="w-6 h-6 cursor-pointer transition-colors"
+                fill={rating <= value ? "#f4a261" : "none"}
+                stroke={rating <= value ? "#f4a261" : "#888"}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/90 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-[#2c3e50] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-[#2c3e50] border-b border-white/10 p-4 sm:p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">Add Your Review</h2>
+            <p className="text-sm text-white/70 mt-1">{placeName}</p>
+            <p className="text-xs text-white/60 mt-0.5">{city}, {country}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Close"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* Visit Date */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white">Visit Date (Optional)</label>
+            <input
+              type="date"
+              value={visitDate}
+              onChange={(e) => setVisitDate(e.target.value)}
+              className="w-full px-4 py-3 bg-[#3d5266] text-white rounded-lg border border-white/10 focus:border-[#66bfcc] focus:outline-none text-sm"
+            />
+          </div>
+
+          {/* Review Notes */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white">Your Review</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-4 py-3 bg-[#3d5266] text-white rounded-lg border border-white/10 focus:border-[#66bfcc] focus:outline-none resize-none"
+              rows={5}
+              placeholder="Share your experience..."
+            />
+          </div>
+
+          {/* Ratings */}
+          <div className="space-y-4">
+            <h3 className="text-base sm:text-lg font-semibold text-white">Ratings</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderStarRating(qualityRating, setQualityRating, "Quality")}
+              {renderStarRating(serviceRating, setServiceRating, "Service")}
+              {renderStarRating(valueRating, setValueRating, "Value")}
+              {renderStarRating(locationRating, setLocationRating, "Location")}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t border-white/10">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-[#66bfcc] text-white rounded-lg hover:bg-[#5aa8b5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Add Review"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

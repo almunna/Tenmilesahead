@@ -37,15 +37,14 @@ const sortAZWithOtherLast = (
 
 /** Duplicated so nothing else in the app needs to change */
 const TRANSPORT_OPTIONS = [
-  "Bicycle",
+  "Airplanes",
   "Bus",
   "Car",
   "Cruise",
-  "Ferry/Boat",
-  "Flight",
+  "RV",
   "Train",
-  "Walking",
-  "Other",
+  "Uber/Taxi",
+  "Walk",
 ];
 
 export default function AddTripModal({
@@ -69,7 +68,6 @@ export default function AddTripModal({
     originState: "",
     originCountry: "",
     transportationType: "",
-    totalMiles: "",
     startDate: "",
     endDate: "",
     description: "",
@@ -266,7 +264,7 @@ export default function AddTripModal({
         transportationType: f.transportationType || null,
         accommodationType: null,
         specificAddress: null,
-        totalMiles: f.totalMiles ? parseFloat(f.totalMiles) : null,
+        totalMiles: null,
         startDate: f.startDate,
         endDate: f.endDate,
         description: f.description || null,
@@ -343,7 +341,7 @@ export default function AddTripModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -529,7 +527,7 @@ export default function AddTripModal({
             </div>
 
             {/* Transportation */}
-            <div>
+            <div className="md:col-span-3">
               <label className="label">Mode of Transportation *</label>
               <select
                 className="input"
@@ -545,20 +543,6 @@ export default function AddTripModal({
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Total Miles Traveled */}
-            <div className="md:col-span-2">
-              <label className="label">Total Miles Traveled</label>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.1"
-                placeholder="e.g., 250"
-                value={f.totalMiles}
-                onChange={(e) => setF({ ...f, totalMiles: e.target.value })}
-              />
             </div>
 
             {/* Dates */}

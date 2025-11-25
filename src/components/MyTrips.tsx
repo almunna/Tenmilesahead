@@ -42,29 +42,29 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <h2 className="text-xl font-semibold">My Trips</h2>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-row gap-2 flex-wrap items-center">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">From</label>
+            <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
             <input
               type="date"
-              className="input h-9"
+              className="input h-9 text-sm"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">To</label>
+            <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
             <input
               type="date"
-              className="input h-9"
+              className="input h-9 text-sm"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />
           </div>
           <button
-            className="navlink"
+            className="navlink whitespace-nowrap text-sm px-3 py-1.5"
             onClick={() => {
               setDateFrom("");
               setDateTo("");
@@ -73,13 +73,13 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
             Clear
           </button>
           <button
-            className="btn"
+            className="btn whitespace-nowrap text-sm px-3 py-1.5"
             onClick={() => setCollapsedTrips((v) => !v)}
             aria-expanded={!collapsedTrips}
           >
             {collapsedTrips ? "Expand" : "Collapse"}
           </button>
-          <button className="btn" onClick={() => setAddOpen(true)}>
+          <button className="btn whitespace-nowrap text-sm px-3 py-1.5" onClick={() => setAddOpen(true)}>
             Add Trip
           </button>
         </div>
@@ -259,6 +259,23 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
         spaceAbove > spaceBelow || rect.bottom > viewportHeight / 2
       );
     }
+  }, [menuOpen]);
+
+  // Close dropdown when clicking anywhere on the screen
+  useEffect(() => {
+    function handleClickOutside() {
+      if (menuOpen) {
+        setMenuOpen(false);
+      }
+    }
+
+    if (menuOpen) {
+      document.addEventListener("click", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
   }, [menuOpen]);
 
   // cover fetch

@@ -395,7 +395,7 @@ function HomeInner() {
 
       {/* Flipbook modal */}
       {flipTripId && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
+        <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/70 flex items-center justify-center">
           <div className="relative w-[95vw] h-[92vh] bg-background rounded-xl overflow-hidden">
             <button
               className="absolute top-2 right-2 z-10 btn"
@@ -1538,7 +1538,7 @@ function ModalShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3">
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/60 flex items-center justify-center p-3">
       <div className="w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-background shadow-xl border border-border">
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur">
           <div className="font-semibold">{title}</div>

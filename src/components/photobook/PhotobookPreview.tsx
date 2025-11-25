@@ -51,7 +51,7 @@ export default function PhotobookPreview({
   }, [currentPageIndex, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/90 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-black/50">
         <div className="text-white">

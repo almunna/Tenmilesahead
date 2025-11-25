@@ -150,7 +150,7 @@ export default function Flipbook({
   const currentMedia = items[currentMediaIndex];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/90 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 text-white">
         <div className="text-sm">
           {isCoverPage ? "Cover" : `Photo ${currentMediaIndex + 1} of ${items.length}`}

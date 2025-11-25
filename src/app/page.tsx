@@ -410,6 +410,97 @@ function fmtMDY(s?: string | number | null) {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+// Helper function to calculate distance between two locations using Haversine formula
+async function calculateDistance(
+  originCity: string | null | undefined,
+  originState: string | null | undefined,
+  originCountry: string | null | undefined,
+  destCity: string,
+  destState: string | null | undefined,
+  destCountry: string
+): Promise<number> {
+  // If no origin location, return 0
+  if (!originCity && !originCountry) {
+    return 0;
+  }
+
+  try {
+    // Build location strings
+    const originParts = [originCity, originState, originCountry].filter(Boolean);
+    const destParts = [destCity, destState, destCountry].filter(Boolean);
+
+    if (originParts.length === 0 || destParts.length === 0) {
+      return 0;
+    }
+
+    const originLocation = originParts.join(", ");
+    const destLocation = destParts.join(", ");
+
+    // Use geocoding API to get coordinates
+    const [originCoords, destCoords] = await Promise.all([
+      geocodeLocation(originLocation),
+      geocodeLocation(destLocation),
+    ]);
+
+    if (!originCoords || !destCoords) {
+      return 0;
+    }
+
+    // Calculate distance using Haversine formula
+    const R = 3958.8; // Earth's radius in miles
+    const lat1 = (originCoords.lat * Math.PI) / 180;
+    const lat2 = (destCoords.lat * Math.PI) / 180;
+    const dLat = ((destCoords.lat - originCoords.lat) * Math.PI) / 180;
+    const dLon = ((destCoords.lon - originCoords.lon) * Math.PI) / 180;
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return Math.round(R * c);
+  } catch (error) {
+    console.error("Error calculating distance:", error);
+    return 0;
+  }
+}
+
+// Helper function to geocode a location string to coordinates
+async function geocodeLocation(
+  location: string
+): Promise<{ lat: number; lon: number } | null> {
+  try {
+    // Using Nominatim (OpenStreetMap) geocoding API - free and no API key required
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+        location
+      )}&format=json&limit=1`,
+      {
+        headers: {
+          "User-Agent": "TenMilesAhead/1.0",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon),
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error geocoding location:", error);
+    return null;
+  }
+}
+
 function HomeInner() {
   const { user } = useAuth();
 
@@ -481,6 +572,7 @@ function HomeInner() {
     totalTrips: 0,
     daysExplored: 0,
     photosCaptured: 0,
+    totalMiles: 0,
     countriesVisited: 0,
     statesVisited: 0,
     citiesVisited: 0,
@@ -500,11 +592,23 @@ function HomeInner() {
       const citySet = new Set<string>();
       let imgTotal = 0;
       let totalDays = 0;
+      let totalMiles = 0;
       const transportCounts: Record<string, number> = {};
       const accommodationCounts: Record<string, number> = {};
 
       for (const docSnap of tSnap.docs) {
         const t = docSnap.data() as Trip;
+
+        // Calculate distance for this trip
+        const tripDistance = await calculateDistance(
+          t.originCity,
+          t.originState,
+          t.originCountry,
+          t.city,
+          t.state,
+          t.country
+        );
+        totalMiles += tripDistance;
 
         // Calculate days for this trip
         if (t.startDate && t.endDate) {
@@ -565,6 +669,7 @@ function HomeInner() {
         totalTrips: tSnap.docs.length,
         daysExplored: totalDays,
         photosCaptured: imgTotal,
+        totalMiles: totalMiles,
         countriesVisited: cSet.size,
         statesVisited: sSet.size,
         citiesVisited: citySet.size,
@@ -587,9 +692,9 @@ function HomeInner() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">Your Display Name</h2>
+                <h2 className="text-xl font-semibold">Name of your journal</h2>
                 <p className="text-muted-foreground text-sm mt-1">
-                  This name is shown on your reviews. (Required)
+                  This name is shown on Global Reviews. (Required)
                 </p>
               </div>
               {isEditingUsername && (
@@ -627,15 +732,14 @@ function HomeInner() {
         {username && !isEditingUsername && (
           <section className="card">
             <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Display Name</h2>
-                <p className="text-muted-foreground text-sm mt-1">{username}</p>
+              <div className="flex-1">
+                <p className="text-3xl font-bold">{username}</p>
               </div>
               <button
                 className="btn"
                 onClick={() => setIsEditingUsername(true)}
               >
-                Edit
+                Edit Name
               </button>
             </div>
           </section>
@@ -653,7 +757,7 @@ function HomeInner() {
 
       {/* Flipbook modal (unchanged) */}
       {flipTripId && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
+        <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/70 flex items-center justify-center">
           <div className="relative w-[95vw] h-[92vh] bg-background rounded-xl overflow-hidden">
             <button
               className="absolute top-2 right-2 z-10 btn"

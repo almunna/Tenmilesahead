@@ -13,8 +13,10 @@ import {
   collection,
   doc,
   getDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/components/AuthProvider";
 
 // ----------------------------- Types & helpers ------------------------------
 type ReviewKind = "activities" | "accommodations" | "restaurants";
@@ -23,6 +25,7 @@ type ReviewDoc = {
   id: string;
   __path: string; // full ref path for debugging
   tripId: string;
+  ownerId?: string; // owner of the parent trip
   kind: ReviewKind;
   name: string;
   startDate?: string | null;
@@ -99,6 +102,7 @@ export default function ReviewsPage() {
 
 // --------------------------------- App -------------------------------------
 function ReviewsInner() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [tiles, setTiles] = useState<PlaceTile[]>([]);
   const [cities, setCities] = useState<string[]>([]);
@@ -122,6 +126,9 @@ function ReviewsInner() {
       // Fetch docs newest-first (by createdAt desc when present)
       const all: ReviewDoc[] = [];
 
+      // Fetch trip owners to check ownership
+      const tripOwners = new Map<string, string>();
+
       for (const kind of kinds) {
         // If you want strict ordering, not all docs will have createdAt, but it's okay.
         const qx = query(
@@ -129,18 +136,33 @@ function ReviewsInner() {
           orderBy("createdAt", "desc")
         );
         const snap = await getDocs(qx);
-        snap.forEach((d) => {
+
+        for (const d of snap.docs) {
           const ref = d.ref;
           // parent chain: trips/{tripId}/{kind}/{docId}
           const parent = ref.parent; // {kind}
           const trip = parent?.parent; // trips/{tripId}
           const tripId = trip?.id || "";
 
+          // Fetch trip owner if not already cached
+          if (tripId && !tripOwners.has(tripId)) {
+            try {
+              const tripDoc = await getDoc(doc(db, "trips", tripId));
+              if (tripDoc.exists()) {
+                const tripData = tripDoc.data();
+                tripOwners.set(tripId, tripData.ownerId || "");
+              }
+            } catch (e) {
+              console.error(`Failed to fetch trip ${tripId}:`, e);
+            }
+          }
+
           const data = d.data() as any;
           const item: ReviewDoc = {
             id: d.id,
             __path: ref.path,
             tripId,
+            ownerId: tripOwners.get(tripId),
             kind,
             name: data.name || "",
             startDate: data.startDate || null,
@@ -158,7 +180,7 @@ function ReviewsInner() {
           if (item.name && item.country) {
             all.push(item);
           }
-        });
+        }
       }
 
       // Distinct city list for filter (non-empty)
@@ -377,7 +399,15 @@ function ReviewsInner() {
 
       {/* Detail modal */}
       {openTile && (
-        <PlaceDetailModal tile={openTile} onClose={() => setOpenTile(null)} />
+        <PlaceDetailModal
+          tile={openTile}
+          currentUserId={user?.uid}
+          onClose={() => setOpenTile(null)}
+          onReviewDeleted={() => {
+            // Reload reviews after deletion
+            window.location.reload();
+          }}
+        />
       )}
     </main>
   );
@@ -409,10 +439,14 @@ function MediaThumb({
 
 function PlaceDetailModal({
   tile,
+  currentUserId,
   onClose,
+  onReviewDeleted,
 }: {
   tile: PlaceTile;
+  currentUserId?: string;
   onClose: () => void;
+  onReviewDeleted: () => void;
 }) {
   const [rows, setRows] = useState<
     Array<
@@ -422,10 +456,37 @@ function PlaceDetailModal({
       }
     >
   >([]);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const handleDelete = async (review: ReviewDoc) => {
+    if (!confirm(`Delete this review for "${review.name}"?`)) return;
+
+    try {
+      setDeleting(review.id);
+      // Delete the review document
+      await deleteDoc(doc(db, "trips", review.tripId, review.kind, review.id));
+
+      // Note: We're not deleting associated media here to preserve it in the trip's media collection
+      // The media will remain linked but orphaned, which is safer for data integrity
+
+      alert("Review deleted successfully!");
+      onReviewDeleted();
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      alert("Failed to delete review. Please try again.");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleEdit = (review: ReviewDoc) => {
+    // Navigate to the trip detail page where they can edit the review
+    window.location.href = `/trips/${review.tripId}`;
+  };
 
   useEffect(() => {
     (async () => {
-      // Load each review’s author + its media
+      // Load each review's author + its media
       const enriched: Array<
         ReviewDoc & { authorUsername?: string; media: MediaItem[] }
       > = [];
@@ -482,7 +543,7 @@ function PlaceDetailModal({
   }, [tile]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3">
+    <div className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/60 flex items-center justify-center p-3">
       <div className="w-full max-w-6xl max-h-[90vh] overflow-auto rounded-2xl bg-background shadow-xl border border-border">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur">
@@ -506,9 +567,31 @@ function PlaceDetailModal({
                 <div className="font-medium">
                   {r.authorUsername ? `@${r.authorUsername}` : "By traveler"}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  {fmtMDY(r.startDate)}
-                  {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""}
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-muted-foreground">
+                    {fmtMDY(r.startDate)}
+                    {r.endDate ? ` → ${fmtMDY(r.endDate)}` : ""}
+                  </div>
+                  {/* Show edit/delete buttons if current user owns this review */}
+                  {currentUserId && r.ownerId === currentUserId && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(r)}
+                        className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        title="Edit this review"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(r)}
+                        disabled={deleting === r.id}
+                        className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete this review"
+                      >
+                        {deleting === r.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -39,15 +39,14 @@ const sortAZWithOtherLast = (
 
 /** Duplicated so nothing else in the app needs to change */
 const TRANSPORT_OPTIONS = [
-  "Bicycle",
+  "Airplanes",
   "Bus",
   "Car",
   "Cruise",
-  "Ferry/Boat",
-  "Flight",
+  "RV",
   "Train",
-  "Walking",
-  "Other",
+  "Uber/Taxi",
+  "Walk",
 ];
 
 const ACCOMMODATION_OPTIONS = [
@@ -81,7 +80,6 @@ export default function EditTripModal({
     transportationType: trip.transportationType || "",
     accommodationType: trip.accommodationType || "",
     specificAddress: trip.specificAddress || "",
-    totalMiles: trip.totalMiles?.toString() || "",
     startDate: trip.startDate || "",
     endDate: trip.endDate || "",
     description: trip.description || "",
@@ -326,7 +324,6 @@ export default function EditTripModal({
         transportationType: f.transportationType || null,
         accommodationType: f.accommodationType || null,
         specificAddress: f.specificAddress || null,
-        totalMiles: f.totalMiles ? parseFloat(f.totalMiles) : null,
         startDate: f.startDate,
         endDate: f.endDate,
         description: f.description || null,
@@ -494,7 +491,7 @@ export default function EditTripModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -502,7 +499,7 @@ export default function EditTripModal({
       <div
         className="
           w-full max-w-full md:max-w-2xl lg:max-w-3xl
-          h-[100dvh] md:h-auto md:max-h-[90vh]
+          h-[100dvh] md:h-auto md:max-h-[80vh]
           bg-surface text-foreground border border-border shadow-lg
           md:rounded-xl
           flex flex-col
@@ -538,7 +535,9 @@ export default function EditTripModal({
 
             {/* Origin Section Header */}
             <div className="md:col-span-3">
-              <h4 className="text-lg font-semibold text-foreground mt-2 mb-1">Starting From</h4>
+              <h4 className="text-lg font-semibold text-foreground mt-2 mb-1">
+                Starting From
+              </h4>
             </div>
 
             {/* Origin Country */}
@@ -550,8 +549,14 @@ export default function EditTripModal({
                 onChange={(e) => {
                   const newCountry = e.target.value;
                   const states = getStates(newCountry);
-                  const nextState = states.includes(f.originState) ? f.originState : "";
-                  setF({ ...f, originCountry: newCountry, originState: nextState });
+                  const nextState = states.includes(f.originState)
+                    ? f.originState
+                    : "";
+                  setF({
+                    ...f,
+                    originCountry: newCountry,
+                    originState: nextState,
+                  });
                 }}
               >
                 <option value="">Select origin country</option>
@@ -570,8 +575,14 @@ export default function EditTripModal({
                 <>
                   <select
                     className="input"
-                    value={availableOriginStates.includes(f.originState) ? f.originState : ""}
-                    onChange={(e) => setF({ ...f, originState: e.target.value })}
+                    value={
+                      availableOriginStates.includes(f.originState)
+                        ? f.originState
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setF({ ...f, originState: e.target.value })
+                    }
                   >
                     <option value="">Select from list</option>
                     {availableOriginStates.map((s) => (
@@ -583,8 +594,14 @@ export default function EditTripModal({
                   <input
                     className="input mt-2"
                     placeholder="Or enter manually"
-                    value={availableOriginStates.includes(f.originState) ? "" : f.originState}
-                    onChange={(e) => setF({ ...f, originState: e.target.value })}
+                    value={
+                      availableOriginStates.includes(f.originState)
+                        ? ""
+                        : f.originState
+                    }
+                    onChange={(e) =>
+                      setF({ ...f, originState: e.target.value })
+                    }
                   />
                 </>
               ) : (
@@ -610,7 +627,9 @@ export default function EditTripModal({
 
             {/* Destination Section Header */}
             <div className="md:col-span-3">
-              <h4 className="text-lg font-semibold text-foreground mt-3 mb-1">Destination</h4>
+              <h4 className="text-lg font-semibold text-foreground mt-3 mb-1">
+                Destination
+              </h4>
             </div>
 
             {/* Country → State/Province → City */}
@@ -698,7 +717,7 @@ export default function EditTripModal({
             </div>
 
             {/* Accommodation */}
-            <div>
+            <div className="md:col-span-3">
               <label className="label">Accommodation Type</label>
               <select
                 className="input"
@@ -714,20 +733,6 @@ export default function EditTripModal({
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Total Miles Traveled */}
-            <div>
-              <label className="label">Total Miles Traveled</label>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.1"
-                placeholder="e.g., 250"
-                value={f.totalMiles}
-                onChange={(e) => setF({ ...f, totalMiles: e.target.value })}
-              />
             </div>
 
             {/* Specific Address */}

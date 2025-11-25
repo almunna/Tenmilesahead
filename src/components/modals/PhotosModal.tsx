@@ -113,7 +113,7 @@ export default function PhotosModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
+      className="fixed inset-x-0 top-[60px] bottom-0 z-[100] bg-black/50 flex items-stretch md:items-center justify-center p-0 md:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

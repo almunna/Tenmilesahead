@@ -17,6 +17,7 @@ export default function WorldMap({
   const map = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const markersByTripId = useRef<Map<string, any>>(new Map());
+  const countryLayersRef = useRef<any[]>([]);
   const [isClient, setIsClient] = useState(false);
 
   // Set client-side flag
@@ -63,7 +64,7 @@ export default function WorldMap({
     };
   }, [isClient]);
 
-  // Add markers for trips
+  // Add markers for trips and highlight visited countries
   useEffect(() => {
     if (!map.current || !isClient) return;
 
@@ -72,12 +73,16 @@ export default function WorldMap({
     markersRef.current = [];
     markersByTripId.current.clear();
 
+    // Remove existing country layers
+    countryLayersRef.current.forEach((layer) => layer.remove());
+    countryLayersRef.current = [];
+
     // Expose function to window for popup button
     (window as any).openTripFlipbook = (tripId: string) => {
       onOpenFlip(tripId);
     };
 
-    // Add markers for each trip (async)
+    // Add markers for each trip and highlight countries (async)
     const addMarkersAsync = async () => {
       // Wait a bit for map to be fully initialized
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -85,6 +90,7 @@ export default function WorldMap({
       // Dynamic import of Leaflet for markers
       const L = await import("leaflet");
       const validCoordinates: any[] = [];
+      const visitedCountries = new Set<string>();
 
       console.log(`Adding markers for ${trips.length} trips`);
 
@@ -96,26 +102,28 @@ export default function WorldMap({
           continue;
         }
 
+        // Add country to visited set
+        if (trip.country) {
+          visitedCountries.add(trip.country.toLowerCase().trim());
+        }
+
         const coordinates = await getCityCoordinates(trip.city, trip.country);
         console.log(`Coordinates for ${trip.city}, ${trip.country}:`, coordinates);
 
         if (coordinates && map.current) {
-          // Create custom icon
+          // Create custom red pin icon
           const customIcon = L.default.divIcon({
-            html: `<div style="
-              width: 30px;
-              height: 30px;
-              background-image: url(/logo.png);
-              background-size: cover;
-              border-radius: 50%;
-              border: 2px solid #66bfcc;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-              cursor: pointer;
-            "></div>`,
+            html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
+                fill="#DC2626"
+                stroke="#991B1B"
+                stroke-width="2"/>
+              <circle cx="16" cy="16" r="6" fill="white"/>
+            </svg>`,
             className: "custom-leaflet-marker",
-            iconSize: [30, 30],
-            iconAnchor: [15, 15],
-            popupAnchor: [0, -15],
+            iconSize: [24, 32],
+            iconAnchor: [12, 32],
+            popupAnchor: [0, -32],
           });
 
           // Create marker
@@ -161,6 +169,101 @@ export default function WorldMap({
       }
 
       console.log(`Total markers added: ${validCoordinates.length}`);
+      console.log(`Visited countries:`, Array.from(visitedCountries));
+
+      // Highlight visited countries
+      if (visitedCountries.size > 0 && map.current) {
+        try {
+          // Fetch country boundaries GeoJSON
+          const response = await fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson');
+          const countriesGeoJSON = await response.json();
+
+          // Country name mapping for common variations
+          const countryNameMap: { [key: string]: string[] } = {
+            'united states': ['united states of america', 'usa', 'us', 'united states'],
+            'united kingdom': ['united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales'],
+            'south korea': ['south korea', 'korea, republic of', 'republic of korea'],
+            'north korea': ['north korea', 'korea, democratic people\'s republic of'],
+            'czech republic': ['czech republic', 'czechia'],
+            'netherlands': ['netherlands', 'holland'],
+            'india': ['india', 'republic of india'],
+            'china': ['china', 'people\'s republic of china'],
+            'france': ['france', 'french republic'],
+            'germany': ['germany', 'federal republic of germany'],
+            'italy': ['italy', 'italian republic'],
+            'spain': ['spain', 'kingdom of spain'],
+            'canada': ['canada'],
+            'mexico': ['mexico', 'united mexican states'],
+            'brazil': ['brazil', 'federative republic of brazil'],
+            'australia': ['australia', 'commonwealth of australia'],
+            'japan': ['japan'],
+            'thailand': ['thailand', 'kingdom of thailand'],
+            'bangladesh': ['bangladesh', 'people\'s republic of bangladesh'],
+            'belgium': ['belgium', 'kingdom of belgium'],
+            'anguilla': ['anguilla'],
+            'aruba': ['aruba'],
+          };
+
+          // Log all available countries in GeoJSON for debugging
+          console.log('Sample GeoJSON feature properties:', countriesGeoJSON.features.slice(0, 3).map((f: any) => f.properties));
+          console.log('Sample GeoJSON countries:', countriesGeoJSON.features.slice(0, 10).map((f: any) => f.properties.ADMIN));
+          console.log('All GeoJSON countries:', countriesGeoJSON.features.map((f: any) => f.properties.ADMIN).sort());
+
+          // Filter GeoJSON to only include visited countries
+          const visitedFeatures = countriesGeoJSON.features.filter((feature: any) => {
+            const geoCountryName = feature.properties.ADMIN || '';
+            const geoCountryLower = geoCountryName.toLowerCase();
+
+            console.log(`Checking GeoJSON country: "${geoCountryName}" (lowercase: "${geoCountryLower}")`);
+
+            // Check direct match
+            if (visitedCountries.has(geoCountryLower)) {
+              console.log(`✓ Direct match found: ${geoCountryLower}`);
+              return true;
+            }
+
+            // Check against mapping
+            for (const visited of visitedCountries) {
+              const mappedNames = countryNameMap[visited] || [visited];
+              for (const mappedName of mappedNames) {
+                const mappedLower = mappedName.toLowerCase();
+                if (geoCountryLower === mappedLower ||
+                    (geoCountryLower.includes(mappedLower) && mappedLower.length > 3) ||
+                    (mappedLower.includes(geoCountryLower) && geoCountryLower.length > 3)) {
+                  console.log(`✓ Mapped match found: ${visited} -> ${geoCountryName}`);
+                  return true;
+                }
+              }
+            }
+
+            return false;
+          });
+
+          console.log(`Found ${visitedFeatures.length} country boundaries to highlight`);
+          console.log(`Matched countries:`, visitedFeatures.map((f: any) => f.properties.ADMIN));
+
+          // Add highlighted country layers
+          visitedFeatures.forEach((feature: any) => {
+            const layer = L.default.geoJSON(feature, {
+              style: {
+                fillColor: '#66bfcc',
+                fillOpacity: 0.35,
+                color: '#66bfcc',
+                weight: 2,
+                opacity: 0.7,
+              },
+            });
+
+            if (map.current) {
+              layer.addTo(map.current);
+              layer.bringToBack(); // Ensure country layers are behind markers
+              countryLayersRef.current.push(layer);
+            }
+          });
+        } catch (error) {
+          console.error('Error loading country boundaries:', error);
+        }
+      }
 
       // Fit map to show all markers if there are trips
       if (validCoordinates.length > 0 && map.current) {
@@ -193,19 +296,19 @@ export default function WorldMap({
     <section className="card">
       <h2 className="text-xl font-semibold">World Map</h2>
       <p className="text-muted-foreground text-sm mt-1">
-        Countries you've visited are marked with pins. Click a pin to view details.
+        Visited countries are shaded in blue with pins marking your specific destinations. Click a pin to view details.
       </p>
 
-      <div className="mt-4 grid md:grid-cols-[70%_30%] gap-4">
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-[70%_30%] gap-4">
         <div
           ref={mapContainer}
-          className="min-h-[500px] w-full rounded-xl overflow-hidden border border-border"
-          style={{ position: 'relative', zIndex: 1, width: '100%', height: '500px' }}
+          className="min-h-[400px] sm:min-h-[500px] md:min-h-[600px] w-full rounded-xl overflow-hidden border border-border"
+          style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', minHeight: '400px' }}
         />
 
         <div className="rounded-xl border border-border p-3">
           <div className="text-sm font-semibold mb-2">Trip Pins</div>
-          <ul className="max-h-[468px] overflow-auto text-sm space-y-1">
+          <ul className="max-h-[368px] sm:max-h-[468px] md:max-h-[568px] overflow-auto text-sm space-y-1">
             {trips.map((t) => (
               <li
                 key={t.id}

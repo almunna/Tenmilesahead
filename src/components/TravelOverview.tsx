@@ -18,12 +18,14 @@ import {
   Camera,
   Globe,
   MapPin,
+  Route,
 } from "lucide-react";
 
 export type TravelStats = {
   totalTrips: number;
   daysExplored: number;
   photosCaptured: number;
+  totalMiles: number;
   countriesVisited: number;
   statesVisited: number;
   citiesVisited: number;
@@ -37,7 +39,7 @@ export default function TravelOverview({ stats }: { stats: TravelStats }) {
       <h2 className="text-2xl font-bold">Your Travel Overview</h2>
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Trips */}
         <StatCard
           icon={<Plane className="w-8 h-8" />}
@@ -58,16 +60,27 @@ export default function TravelOverview({ stats }: { stats: TravelStats }) {
           value={stats.photosCaptured}
           label="Photos Captured"
         />
+
+        {/* Total Miles */}
+        <StatCard
+          icon={<Route className="w-8 h-8" />}
+          value={stats.totalMiles.toLocaleString()}
+          label="Total Miles"
+        />
       </div>
 
       {/* Secondary Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Countries Visited */}
-        <StatCard
-          icon={<Globe className="w-8 h-8" />}
-          value={`${stats.countriesVisited}/197`}
-          label="Countries Visited"
-        />
+        <div className="rounded-lg bg-[#2c3e50] text-white p-6 flex flex-col items-center justify-center space-y-3 shadow-lg">
+          <div className="text-[#66bfcc]">
+            <Globe className="w-8 h-8" />
+          </div>
+          <div className="text-4xl font-bold text-white">
+            {stats.countriesVisited}/197
+          </div>
+          <div className="text-sm text-white/90">Countries Visited</div>
+        </div>
 
         {/* States Visited */}
         <StatCard
