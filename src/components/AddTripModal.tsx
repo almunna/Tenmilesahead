@@ -65,7 +65,11 @@ export default function AddTripModal({
     city: "",
     state: "",
     country: "",
+    originCity: "",
+    originState: "",
+    originCountry: "",
     transportationType: "",
+    totalMiles: "",
     startDate: "",
     endDate: "",
     description: "",
@@ -87,6 +91,11 @@ export default function AddTripModal({
   const availableStates = useMemo(
     () => sortAZWithOtherLast(getStates(f.country)),
     [f.country]
+  );
+
+  const availableOriginStates = useMemo(
+    () => sortAZWithOtherLast(getStates(f.originCountry)),
+    [f.originCountry]
   );
 
   // ------- media pre-select (same UX as Edit modal "pending new") -------
@@ -251,9 +260,13 @@ export default function AddTripModal({
         city: f.city,
         state: f.state || null,
         country: f.country,
+        originCity: f.originCity || null,
+        originState: f.originState || null,
+        originCountry: f.originCountry || null,
         transportationType: f.transportationType || null,
         accommodationType: null,
         specificAddress: null,
+        totalMiles: f.totalMiles ? parseFloat(f.totalMiles) : null,
         startDate: f.startDate,
         endDate: f.endDate,
         description: f.description || null,
@@ -373,6 +386,83 @@ export default function AddTripModal({
               />
             </div>
 
+            {/* Origin Section Header */}
+            <div className="md:col-span-3">
+              <h4 className="text-lg font-semibold text-foreground mt-2 mb-1">Starting From</h4>
+            </div>
+
+            {/* Origin Country */}
+            <div>
+              <label className="label">Origin Country</label>
+              <select
+                className="input"
+                value={f.originCountry}
+                onChange={(e) => {
+                  const newCountry = e.target.value;
+                  const states = getStates(newCountry);
+                  const nextState = states.includes(f.originState) ? f.originState : "";
+                  setF({ ...f, originCountry: newCountry, originState: nextState });
+                }}
+              >
+                <option value="">Select origin country</option>
+                {sortedCountries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Origin State / Province */}
+            <div>
+              <label className="label">Origin State / Province</label>
+              {availableOriginStates.length ? (
+                <>
+                  <select
+                    className="input"
+                    value={availableOriginStates.includes(f.originState) ? f.originState : ""}
+                    onChange={(e) => setF({ ...f, originState: e.target.value })}
+                  >
+                    <option value="">Select from list</option>
+                    {availableOriginStates.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input mt-2"
+                    placeholder="Enter manually"
+                    value={availableOriginStates.includes(f.originState) ? "" : f.originState}
+                    onChange={(e) => setF({ ...f, originState: e.target.value })}
+                  />
+                </>
+              ) : (
+                <input
+                  className="input"
+                  placeholder="e.g., Florida"
+                  value={f.originState}
+                  onChange={(e) => setF({ ...f, originState: e.target.value })}
+                />
+              )}
+            </div>
+
+            {/* Origin City */}
+            <div>
+              <label className="label">Origin City</label>
+              <input
+                className="input"
+                placeholder="e.g., St. Augustine"
+                value={f.originCity}
+                onChange={(e) => setF({ ...f, originCity: e.target.value })}
+              />
+            </div>
+
+            {/* Destination Section Header */}
+            <div className="md:col-span-3">
+              <h4 className="text-lg font-semibold text-foreground mt-3 mb-1">Destination</h4>
+            </div>
+
             {/* Country → State/Province → City */}
             <div>
               <label className="label">Country *</label>
@@ -455,6 +545,20 @@ export default function AddTripModal({
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Total Miles Traveled */}
+            <div className="md:col-span-2">
+              <label className="label">Total Miles Traveled</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="e.g., 250"
+                value={f.totalMiles}
+                onChange={(e) => setF({ ...f, totalMiles: e.target.value })}
+              />
             </div>
 
             {/* Dates */}
