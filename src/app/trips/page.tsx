@@ -101,9 +101,13 @@ function TripsInner() {
     city: "",
     state: "",
     country: "",
+    originCity: "",
+    originState: "",
+    originCountry: "",
     transportationType: "",
     accommodationType: "",
     specificAddress: "",
+    totalMiles: "",
     startDate: "",
     endDate: "",
     description: "",
@@ -268,9 +272,13 @@ function TripsInner() {
       city: form.city,
       state: form.state || null,
       country: form.country,
+      originCity: form.originCity || null,
+      originState: form.originState || null,
+      originCountry: form.originCountry || null,
       transportationType: form.transportationType,
       accommodationType: form.accommodationType,
       specificAddress: form.specificAddress || null,
+      totalMiles: form.totalMiles ? parseFloat(form.totalMiles) : null,
       startDate: form.startDate,
       endDate: form.endDate,
       description: form.description || null,
@@ -341,9 +349,13 @@ function TripsInner() {
       city: "",
       state: "",
       country: "",
+      originCity: "",
+      originState: "",
+      originCountry: "",
       transportationType: "",
       accommodationType: "",
       specificAddress: "",
+      totalMiles: "",
       startDate: "",
       endDate: "",
       description: "",
@@ -386,6 +398,11 @@ function TripsInner() {
   const availableStates = useMemo(
     () => sortAZWithOtherLast(getStates(form.country)),
     [form.country]
+  );
+
+  const availableOriginStates = useMemo(
+    () => sortAZWithOtherLast(getStates(form.originCountry)),
+    [form.originCountry]
   );
 
   return (
@@ -459,6 +476,83 @@ function TripsInner() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
+          </div>
+
+          {/* Origin Section Header */}
+          <div className="md:col-span-3">
+            <h3 className="text-lg font-semibold text-foreground mb-2">Starting From</h3>
+          </div>
+
+          {/* Origin Country */}
+          <div>
+            <label className="label">Origin Country</label>
+            <select
+              className="input"
+              value={form.originCountry}
+              onChange={(e) => {
+                const newCountry = e.target.value;
+                const states = getStates(newCountry);
+                const nextState = states.includes(form.originState) ? form.originState : "";
+                setForm({ ...form, originCountry: newCountry, originState: nextState });
+              }}
+            >
+              <option value="">Select origin country</option>
+              {sortedCountries.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Origin State / Province / Island */}
+          <div>
+            <label className="label">Origin State / Province</label>
+            {availableOriginStates.length ? (
+              <>
+                <select
+                  className="input"
+                  value={availableOriginStates.includes(form.originState) ? form.originState : ""}
+                  onChange={(e) => setForm({ ...form, originState: e.target.value })}
+                >
+                  <option value="">Select from list</option>
+                  {availableOriginStates.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input mt-2"
+                  placeholder="Enter manually"
+                  value={availableOriginStates.includes(form.originState) ? "" : form.originState}
+                  onChange={(e) => setForm({ ...form, originState: e.target.value })}
+                />
+              </>
+            ) : (
+              <input
+                className="input"
+                placeholder="e.g., Florida"
+                value={form.originState}
+                onChange={(e) => setForm({ ...form, originState: e.target.value })}
+              />
+            )}
+          </div>
+
+          {/* Origin City */}
+          <div>
+            <label className="label">Origin City</label>
+            <input
+              className="input"
+              placeholder="e.g., St. Augustine"
+              value={form.originCity}
+              onChange={(e) => setForm({ ...form, originCity: e.target.value })}
+            />
+          </div>
+
+          {/* Destination Section Header */}
+          <div className="md:col-span-3">
+            <h3 className="text-lg font-semibold text-foreground mb-2 mt-4">Destination</h3>
           </div>
 
           {/* Country */}
@@ -568,6 +662,20 @@ function TripsInner() {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Total Miles Traveled */}
+          <div className="md:col-span-3">
+            <label className="label">Total Miles Traveled</label>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              step="0.1"
+              placeholder="e.g., 250"
+              value={form.totalMiles}
+              onChange={(e) => setForm({ ...form, totalMiles: e.target.value })}
+            />
           </div>
 
           {/* Specific Address */}
@@ -718,9 +826,13 @@ function TripsInner() {
                   city: "",
                   state: "",
                   country: "",
+                  originCity: "",
+                  originState: "",
+                  originCountry: "",
                   transportationType: "",
                   accommodationType: "",
                   specificAddress: "",
+                  totalMiles: "",
                   startDate: "",
                   endDate: "",
                   description: "",
@@ -1118,6 +1230,42 @@ function TripCard({
           </svg>
           <span className="text-sm">{dateRangeOf(trip)}</span>
         </div>
+
+        {/* Origin to Destination */}
+        {trip.originCity && (
+          <div className="flex items-center gap-2 text-white/80">
+            <svg
+              className="w-4 h-4 flex-shrink-0"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm.707-10.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L9.414 11H13a1 1 0 100-2H9.414l1.293-1.293z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="text-sm">
+              From {trip.originCity}
+              {trip.originState ? `, ${trip.originState}` : ""}
+            </span>
+          </div>
+        )}
+
+        {/* Total Miles */}
+        {trip.totalMiles !== null && trip.totalMiles !== undefined && (
+          <div className="flex items-center gap-2 text-white/80">
+            <svg
+              className="w-4 h-4 flex-shrink-0"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+              <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
+            </svg>
+            <span className="text-sm">{trip.totalMiles.toLocaleString()} miles</span>
+          </div>
+        )}
 
         {/* Bottom action bar with dropdown and standalone icons */}
         <div className="relative flex items-center gap-2">

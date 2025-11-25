@@ -6,9 +6,14 @@ export type Trip = {
 
   // Basic
   name: string; // Trip Title *
-  city: string; // *
-  state?: string | null; // optional
-  country: string; // *
+  city: string; // Destination city *
+  state?: string | null; // Destination state (optional)
+  country: string; // Destination country *
+
+  // Origin location (where trip started from)
+  originCity?: string | null;
+  originState?: string | null;
+  originCountry?: string | null;
 
   // Logistics
   transportationType: string; // *
@@ -16,6 +21,9 @@ export type Trip = {
 
   // Location details
   specificAddress?: string | null;
+
+  // Trip stats
+  totalMiles?: number | null; // Total miles traveled
 
   // Timing
   startDate: string; // ISO yyyy-MM-dd *
