@@ -68,18 +68,6 @@ const TRANSPORT_OPTIONS = [
   "Walk",
 ];
 
-const ACCOMMODATION_OPTIONS = [
-  "Apartment / Airbnb",
-  "Camping",
-  "Cruise",
-  "Friend/Family",
-  "Guesthouse",
-  "Hostel",
-  "Hotel",
-  "Resort",
-  "Other",
-];
-
 export default function TripsPage() {
   return (
     <Protected>
@@ -103,8 +91,8 @@ function TripsInner() {
     originCity: "",
     originState: "",
     originCountry: "",
+    originAddress: "",
     transportationType: "",
-    accommodationType: "",
     specificAddress: "",
     startDate: "",
     endDate: "",
@@ -290,8 +278,8 @@ function TripsInner() {
       originCity: form.originCity || null,
       originState: form.originState || null,
       originCountry: form.originCountry || null,
+      originAddress: form.originAddress || null,
       transportationType: form.transportationType,
-      accommodationType: form.accommodationType,
       specificAddress: form.specificAddress || null,
       totalMiles: null,
       startDate: form.startDate,
@@ -564,6 +552,17 @@ function TripsInner() {
             />
           </div>
 
+          {/* Origin Address */}
+          <div className="md:col-span-3">
+            <label className="label">Origin Address</label>
+            <input
+              className="input"
+              placeholder="e.g., 123 Main Street, Suite 100"
+              value={form.originAddress}
+              onChange={(e) => setForm({ ...form, originAddress: e.target.value })}
+            />
+          </div>
+
           {/* Destination Section Header */}
           <div className="md:col-span-3">
             <h3 className="text-lg font-semibold text-foreground mb-2 mt-4">Destination</h3>
@@ -638,9 +637,9 @@ function TripsInner() {
             />
           </div>
 
-          {/* Mode of Transportation and Accommodation Type - horizontal row */}
-          <div className="md:col-span-3 grid md:grid-cols-2 gap-4">
-            <div>
+          {/* Mode of Transportation */}
+          <div className="md:col-span-3">
+            <div className="md:w-1/2">
               <label className="label">Mode of Transportation *</label>
               <select
                 className="input"
@@ -652,24 +651,6 @@ function TripsInner() {
               >
                 <option value="">Select transportation</option>
                 {TRANSPORT_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Accommodation Type</label>
-              <select
-                className="input"
-                value={form.accommodationType}
-                onChange={(e) =>
-                  setForm({ ...form, accommodationType: e.target.value })
-                }
-              >
-                <option value="">Select accommodation</option>
-                {ACCOMMODATION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
