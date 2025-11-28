@@ -18,6 +18,7 @@ import Protected from "@/components/Protected";
 import Uploader from "@/components/Uploader";
 import Flipbook from "@/components/Flipbook";
 import EditTripModal from "@/components/EditTripModal";
+import TripDetailMap from "@/components/TripDetailMap";
 import Link from "next/link";
 
 /* Helpers */
@@ -69,11 +70,85 @@ type SimplePlace = {
   valueRating?: number | null;
   serviceRating?: number | null;
   locationRating?: number | null;
+  // Cruise-specific fields
+  cruiseLine?: string | null;
+  shipName?: string | null;
+  foodRating?: number | null;
+  entertainmentRating?: number | null;
+  transportationMode?: string | null;
   createdAt?: number;
   updatedAt?: number;
   // optional extras (transportationType/accommodationType, etc.)
   [key: string]: any;
 };
+
+/** Transportation mode icon component */
+function TransportIcon({ mode }: { mode: string }) {
+  const iconClass = "w-4 h-4 inline-block";
+
+  switch (mode) {
+    case "Airplane":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+        </svg>
+      );
+    case "Boat/Ferry":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/>
+        </svg>
+      );
+    case "Bus":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+        </svg>
+      );
+    case "Car":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+        </svg>
+      );
+    case "Cruise":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z"/>
+        </svg>
+      );
+    case "RV":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M18 4h-5V1h-2v3H6c-1.1 0-2 .9-2 2v8h1c0 1.66 1.34 3 3 3s3-1.34 3-3h4c0 1.66 1.34 3 3 3s3-1.34 3-3h1V8l-4-4zm-6 2h3l2 2h-5V6zM8 15c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm10 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
+        </svg>
+      );
+    case "Taxi/Rideshare":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H15V3H9v2H6.5c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
+        </svg>
+      );
+    case "Train":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-7H6V6h5v4zm2 0V6h5v4h-5zm3.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+        </svg>
+      );
+    case "Walk":
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>
+        </svg>
+      );
+    default:
+      return (
+        <svg className={iconClass} fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8"/>
+        </svg>
+      );
+  }
+}
 
 /** Format phone number to (555) 123-1234 format */
 function formatPhoneNumber(phoneNumber: string): string {
@@ -107,9 +182,11 @@ function PlaceCard({
     | "destinations"
     | "activities"
     | "accommodations"
-    | "restaurants";
+    | "restaurants"
+    | "cruises";
   onViewPhotos: () => void;
 }) {
+  const isCruise = subcollection === "cruises";
   const loc = [item.address, item.city, item.state, item.country]
     .filter(Boolean)
     .join(", ");
@@ -120,6 +197,14 @@ function PlaceCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-base break-words">{item.name}</div>
+          {/* Cruise Line and Ship Name for cruises */}
+          {isCruise && (item.cruiseLine || item.shipName) && (
+            <div className="text-sm text-foreground break-words">
+              {item.cruiseLine && <span>{item.cruiseLine}</span>}
+              {item.cruiseLine && item.shipName && <span> • </span>}
+              {item.shipName && <span>{item.shipName}</span>}
+            </div>
+          )}
           <div className="text-sm text-muted-foreground break-words">
             {fmtMDY(item.startDate)}
             {item.endDate ? ` → ${fmtMDY(item.endDate)}` : ""}
@@ -130,6 +215,17 @@ function PlaceCard({
           View Photos
         </button>
       </div>
+
+      {/* Transportation Mode */}
+      {item.transportationMode && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Transport:</span>
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-haiti-800/5 text-foreground">
+            <TransportIcon mode={item.transportationMode} />
+            {item.transportationMode}
+          </span>
+        </div>
+      )}
 
       {/* Contact Info */}
       {(item.phoneNumber || item.websiteUrl) && (
@@ -163,7 +259,9 @@ function PlaceCard({
       {(item.qualityRating != null ||
         item.valueRating != null ||
         item.serviceRating != null ||
-        item.locationRating != null) && (
+        item.locationRating != null ||
+        item.foodRating != null ||
+        item.entertainmentRating != null) && (
         <div className="grid grid-cols-2 gap-2 text-sm">
           {item.qualityRating != null && (
             <div className="flex items-center gap-2">
@@ -231,6 +329,41 @@ function PlaceCard({
               </div>
             </div>
           )}
+          {/* Cruise-specific ratings */}
+          {item.foodRating != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Food:</span>
+              <div className="flex gap-0.5 text-yellow-500">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={
+                      star <= item.foodRating! ? "" : "text-gray-300"
+                    }
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {item.entertainmentRating != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Entertainment:</span>
+              <div className="flex gap-0.5 text-yellow-500">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={
+                      star <= item.entertainmentRating! ? "" : "text-gray-300"
+                    }
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -288,6 +421,7 @@ function TripInner() {
     []
   );
   const [restaurants, setRestaurants] = useState<WithId<SimplePlace>[]>([]);
+  const [cruises, setCruises] = useState<WithId<SimplePlace>[]>([]);
 
   const [selectedItem, setSelectedItem] = useState<{
     id: string;
@@ -296,7 +430,8 @@ function TripInner() {
       | "destinations"
       | "activities"
       | "accommodations"
-      | "restaurants";
+      | "restaurants"
+      | "cruises";
   } | null>(null);
   // ---- END NEW ----
 
@@ -517,23 +652,36 @@ function TripInner() {
         setRestaurants(arr);
       }
     );
+    const unsubCruises = onSnapshot(
+      query(
+        collection(db, "trips", tripId, "cruises"),
+        orderBy("createdAt", "desc")
+      ),
+      (snap) => {
+        const arr: WithId<SimplePlace>[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...(d.data() as any) }));
+        setCruises(arr);
+      }
+    );
 
     return () => {
       unsubDest();
       unsubActs();
       unsubAcc();
       unsubRes();
+      unsubCruises();
     };
   }, [tripId, user]);
 
   const itineraryRows = useMemo(() => {
     const rows: Array<{
-      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant";
+      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant" | "Cruise";
       subcollection:
         | "destinations"
         | "activities"
         | "accommodations"
-        | "restaurants";
+        | "restaurants"
+        | "cruises";
       data: WithId<SimplePlace>;
     }> = [];
 
@@ -553,6 +701,9 @@ function TripInner() {
     restaurants.forEach((d) =>
       rows.push({ kind: "Restaurant", subcollection: "restaurants", data: d })
     );
+    cruises.forEach((d) =>
+      rows.push({ kind: "Cruise", subcollection: "cruises", data: d })
+    );
 
     rows.sort((a, b) => {
       const sa = a.data.startDate ? new Date(a.data.startDate).getTime() : 0;
@@ -561,7 +712,7 @@ function TripInner() {
     });
 
     return rows;
-  }, [destinations, activities, accommodations, restaurants]);
+  }, [destinations, activities, accommodations, restaurants, cruises]);
   // ---- END NEW ----
 
   return (
@@ -811,6 +962,16 @@ function TripInner() {
         </div>
       )}
 
+      {/* ---- Trip Detail Map ---- */}
+      {!error && trip && (
+        <TripDetailMap
+          destinations={destinations}
+          activities={activities}
+          tripCity={trip.city}
+          tripCountry={trip.country}
+        />
+      )}
+
       {/* ---- NEW: Itinerary (chronological) ---- */}
       {!error && (
         <div className="card">
@@ -982,6 +1143,32 @@ function TripInner() {
         </div>
       )}
 
+      {/* ---- NEW: Cruises list ---- */}
+      {!error && (
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-2">Cruises</h2>
+          <div className="space-y-3">
+            {cruises.map((r) => (
+              <PlaceCard
+                key={r.id}
+                item={r}
+                subcollection="cruises"
+                onViewPhotos={() =>
+                  setSelectedItem({
+                    id: r.id!,
+                    name: r.name,
+                    subcollection: "cruises",
+                  })
+                }
+              />
+            ))}
+            {cruises.length === 0 && (
+              <div className="text-sm text-muted-foreground">No items yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Flipbook (all media) */}
       <Flipbook
         tripId={tripId}
@@ -1023,7 +1210,8 @@ function ItemFlipbook({
     | "destinations"
     | "activities"
     | "accommodations"
-    | "restaurants";
+    | "restaurants"
+    | "cruises";
   itemName: string;
   onClose: () => void;
 }) {

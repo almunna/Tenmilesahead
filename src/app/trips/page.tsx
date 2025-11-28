@@ -58,15 +58,14 @@ function clamp(n: number, min: number, max: number) {
 }
 
 const TRANSPORT_OPTIONS = [
-  "Bicycle",
+  "Airplanes",
   "Bus",
   "Car",
   "Cruise",
-  "Ferry/Boat",
-  "Flight",
+  "RV",
   "Train",
-  "Walking",
-  "Other",
+  "Uber/Taxi",
+  "Walk",
 ];
 
 const ACCOMMODATION_OPTIONS = [
@@ -876,6 +875,13 @@ function TripsInner() {
           title="Activities"
           tripId={activitiesFor}
           subcollection="activities"
+          extraLeft={[
+            {
+              key: "transportationType",
+              label: "Mode of Transportation",
+              options: TRANSPORT_OPTIONS,
+            },
+          ]}
           onClose={() => setActivitiesFor(null)}
         />
       )}
@@ -887,15 +893,8 @@ function TripsInner() {
           extraLeft={[
             {
               key: "transportationType",
-              label: "Transportation Type",
+              label: "Mode of Transportation",
               options: TRANSPORT_OPTIONS,
-            },
-          ]}
-          extraRight={[
-            {
-              key: "accommodationType",
-              label: "Accommodation Type",
-              options: ACCOMMODATION_OPTIONS,
             },
           ]}
           onClose={() => setAccommodationsFor(null)}

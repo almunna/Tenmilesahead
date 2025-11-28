@@ -718,32 +718,14 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
               key: "transportationType",
               label: "Mode of Transportation",
               options: [
-                "Bicycle",
+                "Airplanes",
                 "Bus",
                 "Car",
                 "Cruise",
-                "Ferry/Boat",
-                "Flight",
+                "RV",
                 "Train",
-                "Walking",
-                "Other",
-              ],
-            },
-          ]}
-          extraRight={[
-            {
-              key: "accommodationType",
-              label: "Accommodation Type",
-              options: [
-                "Apartment / Airbnb",
-                "Camping",
-                "Cruise",
-                "Friend/Family",
-                "Guesthouse",
-                "Hostel",
-                "Hotel",
-                "Resort",
-                "Other",
+                "Uber/Taxi",
+                "Walk",
               ],
             },
           ]}
@@ -755,6 +737,22 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           title="Activities"
           tripId={trip.id}
           subcollection="activities"
+          extraLeft={[
+            {
+              key: "transportationType",
+              label: "Mode of Transportation",
+              options: [
+                "Airplanes",
+                "Bus",
+                "Car",
+                "Cruise",
+                "RV",
+                "Train",
+                "Uber/Taxi",
+                "Walk",
+              ],
+            },
+          ]}
           onClose={() => setActivitiesOpen(false)}
         />
       )}

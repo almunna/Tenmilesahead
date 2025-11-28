@@ -17,9 +17,10 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthProvider";
+import { getCruiseLineNames, getShipsForCruiseLine, OTHER_CRUISE_LINE } from "@/lib/cruiseData";
 
 // ----------------------------- Types & helpers ------------------------------
-type ReviewKind = "activities" | "accommodations" | "restaurants";
+type ReviewKind = "activities" | "accommodations" | "restaurants" | "cruises";
 
 type ReviewDoc = {
   id: string;
@@ -36,6 +37,9 @@ type ReviewDoc = {
   country: string;
   price?: number | null;
   priceUnit?: string | null;
+  // Cruise-specific fields
+  cruiseLine?: string | null;
+  shipName?: string | null;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -64,6 +68,9 @@ type PlaceTile = {
   thumbs: Array<{ url: string; type: "image" | "video" }>;
   // For details modal
   reviews: ReviewDoc[];
+  // Cruise-specific fields for filtering
+  cruiseLine?: string;
+  shipName?: string;
 };
 
 const fmtMDY = (s?: string | number | null) => {
@@ -82,6 +89,7 @@ const KIND_LABEL: Record<ReviewKind, string> = {
   activities: "Activity",
   accommodations: "Accommodation",
   restaurants: "Restaurant",
+  cruises: "Cruise",
 };
 
 const KIND_OPTIONS: { value: "" | ReviewKind; label: string }[] = [
@@ -89,6 +97,7 @@ const KIND_OPTIONS: { value: "" | ReviewKind; label: string }[] = [
   { value: "activities", label: "Activities" },
   { value: "accommodations", label: "Accommodations" },
   { value: "restaurants", label: "Restaurants" },
+  { value: "cruises", label: "Cruises" },
 ];
 
 // ------------------------------- Page root ---------------------------------
@@ -109,6 +118,12 @@ function ReviewsInner() {
   const [filterCity, setFilterCity] = useState("");
   const [filterKind, setFilterKind] = useState<"" | ReviewKind>("");
 
+  // Cruise-specific filters
+  const [filterCruiseLine, setFilterCruiseLine] = useState("");
+  const [filterShipName, setFilterShipName] = useState("");
+  const [availableCruiseLines, setAvailableCruiseLines] = useState<string[]>([]);
+  const [availableShipNames, setAvailableShipNames] = useState<string[]>([]);
+
   const [openTile, setOpenTile] = useState<PlaceTile | null>(null);
 
   // Load & aggregate all reviews across users (collectionGroup)
@@ -121,6 +136,7 @@ function ReviewsInner() {
         "activities",
         "accommodations",
         "restaurants",
+        "cruises",
       ];
 
       // Fetch docs newest-first (by createdAt desc when present)
@@ -173,6 +189,9 @@ function ReviewsInner() {
             country: data.country || "",
             price: data.price ?? null,
             priceUnit: data.priceUnit || null,
+            // Cruise-specific fields
+            cruiseLine: data.cruiseLine || null,
+            shipName: data.shipName || null,
             createdAt: data.createdAt || undefined,
             updatedAt: data.updatedAt || undefined,
           };
@@ -192,14 +211,27 @@ function ReviewsInner() {
       );
       setCities(Array.from(citySet));
 
+      // Collect unique cruise lines and ship names for filtering
+      const cruiseLineSet = new Set<string>();
+      const shipNameSet = new Set<string>();
+      all.filter(r => r.kind === "cruises").forEach(r => {
+        if (r.cruiseLine) cruiseLineSet.add(r.cruiseLine);
+        if (r.shipName) shipNameSet.add(r.shipName);
+      });
+      setAvailableCruiseLines(Array.from(cruiseLineSet).sort((a, b) => a.localeCompare(b)));
+      setAvailableShipNames(Array.from(shipNameSet).sort((a, b) => a.localeCompare(b)));
+
       // Group by place identity
       const map = new Map<TileKey, PlaceTile>();
       for (const r of all) {
         const city = (r.city || "").trim();
         const state = (r.state || "").trim();
-        const key: TileKey = `${
-          r.kind
-        }|${r.name.trim()}|${city}|${state}|${r.country.trim()}`;
+        // For cruises, include cruise line and ship name in the key
+        const cruiseLine = (r.cruiseLine || "").trim();
+        const shipName = (r.shipName || "").trim();
+        const key: TileKey = r.kind === "cruises"
+          ? `${r.kind}|${r.name.trim()}|${cruiseLine}|${shipName}|${r.country.trim()}`
+          : `${r.kind}|${r.name.trim()}|${city}|${state}|${r.country.trim()}`;
 
         if (!map.has(key)) {
           map.set(key, {
@@ -212,6 +244,9 @@ function ReviewsInner() {
             reviewCount: 0,
             thumbs: [],
             reviews: [],
+            // Cruise-specific fields
+            cruiseLine: cruiseLine || undefined,
+            shipName: shipName || undefined,
           });
         }
         const t = map.get(key)!;
@@ -273,9 +308,26 @@ function ReviewsInner() {
       if (filterKind && t.kind !== filterKind) return false;
       if (filterCity && t.city.toLowerCase() !== filterCity.toLowerCase())
         return false;
+      // Cruise-specific filters (only apply when filtering by cruises)
+      if (filterKind === "cruises") {
+        if (filterCruiseLine && t.cruiseLine !== filterCruiseLine) return false;
+        if (filterShipName && t.shipName !== filterShipName) return false;
+      }
       return true;
     });
-  }, [tiles, filterCity, filterKind]);
+  }, [tiles, filterCity, filterKind, filterCruiseLine, filterShipName]);
+
+  // Get available ship names based on selected cruise line
+  const filteredShipNames = useMemo(() => {
+    if (!filterCruiseLine) return availableShipNames;
+    // Filter ships that belong to the selected cruise line from the tiles
+    const shipsForLine = new Set<string>();
+    tiles.filter(t => t.kind === "cruises" && t.cruiseLine === filterCruiseLine)
+      .forEach(t => {
+        if (t.shipName) shipsForLine.add(t.shipName);
+      });
+    return Array.from(shipsForLine).sort((a, b) => a.localeCompare(b));
+  }, [filterCruiseLine, availableShipNames, tiles]);
 
   return (
     <main className="container py-8 space-y-6">
@@ -303,7 +355,7 @@ function ReviewsInner() {
               ))}
             </datalist>
             <div className="text-xs text-muted-foreground mt-1">
-              Pick any city that appears in reviewers’ entries.
+              Pick any city that appears in reviewers' entries.
             </div>
           </div>
 
@@ -312,7 +364,15 @@ function ReviewsInner() {
             <select
               className="input"
               value={filterKind}
-              onChange={(e) => setFilterKind(e.target.value as any)}
+              onChange={(e) => {
+                const newKind = e.target.value as "" | ReviewKind;
+                setFilterKind(newKind);
+                // Reset cruise filters when changing type
+                if (newKind !== "cruises") {
+                  setFilterCruiseLine("");
+                  setFilterShipName("");
+                }
+              }}
             >
               {KIND_OPTIONS.map((o) => (
                 <option key={o.label} value={o.value}>
@@ -328,12 +388,55 @@ function ReviewsInner() {
               onClick={() => {
                 setFilterCity("");
                 setFilterKind("");
+                setFilterCruiseLine("");
+                setFilterShipName("");
               }}
             >
               Clear Filters
             </button>
           </div>
         </div>
+
+        {/* Cruise-specific filters (only shown when Cruises is selected) */}
+        {filterKind === "cruises" && (
+          <div className="grid md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-border">
+            <div>
+              <label className="label">Cruise Line</label>
+              <select
+                className="input"
+                value={filterCruiseLine}
+                onChange={(e) => {
+                  setFilterCruiseLine(e.target.value);
+                  // Reset ship name when cruise line changes
+                  setFilterShipName("");
+                }}
+              >
+                <option value="">All Cruise Lines</option>
+                {availableCruiseLines.map((line) => (
+                  <option key={line} value={line}>
+                    {line}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Ship Name</label>
+              <select
+                className="input"
+                value={filterShipName}
+                onChange={(e) => setFilterShipName(e.target.value)}
+              >
+                <option value="">All Ships</option>
+                {filteredShipNames.map((ship) => (
+                  <option key={ship} value={ship}>
+                    {ship}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Tiles */}
@@ -384,7 +487,9 @@ function ReviewsInner() {
                     </span>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {[t.city, t.state, t.country].filter(Boolean).join(", ")}
+                    {t.kind === "cruises"
+                      ? [t.cruiseLine, t.shipName].filter(Boolean).join(" - ")
+                      : [t.city, t.state, t.country].filter(Boolean).join(", ")}
                   </div>
                   <div className="text-sm mt-1">
                     <span className="font-medium">{t.reviewCount}</span> review
@@ -551,7 +656,9 @@ function PlaceDetailModal({
             <div className="font-semibold text-lg">{tile.name}</div>
             <div className="text-sm text-muted-foreground">
               {KIND_LABEL[tile.kind]} •{" "}
-              {[tile.city, tile.state, tile.country].filter(Boolean).join(", ")}
+              {tile.kind === "cruises"
+                ? [tile.cruiseLine, tile.shipName].filter(Boolean).join(" - ")
+                : [tile.city, tile.state, tile.country].filter(Boolean).join(", ")}
             </div>
           </div>
           <button className="btn" onClick={onClose}>
@@ -596,9 +703,11 @@ function PlaceDetailModal({
               </div>
 
               <div className="text-sm text-muted-foreground mt-1">
-                {[r.address, r.city, r.state, r.country]
-                  .filter(Boolean)
-                  .join(", ") || "—"}
+                {r.kind === "cruises"
+                  ? [r.cruiseLine, r.shipName].filter(Boolean).join(" - ") || "—"
+                  : [r.address, r.city, r.state, r.country]
+                      .filter(Boolean)
+                      .join(", ") || "—"}
                 {r.price != null
                   ? ` • ${r.price}${r.priceUnit ? ` ${r.priceUnit}` : ""}`
                   : ""}
@@ -657,8 +766,8 @@ function PlaceDetailModal({
           )}
 
           <div className="pt-2 text-xs text-muted-foreground">
-            Tip: Photos/videos here come from the entries’ uploads (Activities,
-            Accommodations, Restaurants). All photos also appear in each trip’s
+            Tip: Photos/videos here come from the entries' uploads (Activities,
+            Accommodations, Restaurants, Cruises). All photos also appear in each trip's
             flipbook.
           </div>
         </div>

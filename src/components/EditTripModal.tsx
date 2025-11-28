@@ -21,6 +21,7 @@ import {
 } from "firebase/storage";
 import type { Trip, MediaItem } from "@/lib/types";
 import { COUNTRIES, getStates } from "@/lib/geo";
+import { getCruiseLineNames, getShipsForCruiseLine, OTHER_CRUISE_LINE } from "@/lib/cruiseData";
 import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
 
 /** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
@@ -69,6 +70,26 @@ export default function EditTripModal({
   onClose: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+
+  // Determine initial cruise field values from existing trip data
+  const getInitialCruiseFields = () => {
+    const cruiseLine = trip.cruiseLine || "";
+    const cruiseShip = trip.cruiseShip || "";
+    const knownLines = getCruiseLineNames().filter(l => l !== OTHER_CRUISE_LINE);
+    const isKnownLine = knownLines.includes(cruiseLine);
+    const knownShips = isKnownLine ? getShipsForCruiseLine(cruiseLine).filter(s => s !== "Other") : [];
+    const isKnownShip = knownShips.includes(cruiseShip);
+
+    return {
+      cruiseLine: isKnownLine ? cruiseLine : (cruiseLine ? OTHER_CRUISE_LINE : ""),
+      cruiseShip: isKnownShip ? cruiseShip : (cruiseShip && isKnownLine ? "Other" : ""),
+      customCruiseLine: isKnownLine ? "" : cruiseLine,
+      customCruiseShip: isKnownShip ? "" : cruiseShip,
+    };
+  };
+
+  const initialCruise = getInitialCruiseFields();
+
   const [f, setF] = useState({
     name: trip.name || "",
     city: trip.city || "",
@@ -78,6 +99,10 @@ export default function EditTripModal({
     originState: trip.originState || "",
     originCountry: trip.originCountry || "",
     transportationType: trip.transportationType || "",
+    cruiseLine: initialCruise.cruiseLine,
+    cruiseShip: initialCruise.cruiseShip,
+    customCruiseLine: initialCruise.customCruiseLine,
+    customCruiseShip: initialCruise.customCruiseShip,
     accommodationType: trip.accommodationType || "",
     specificAddress: trip.specificAddress || "",
     startDate: trip.startDate || "",
@@ -85,11 +110,28 @@ export default function EditTripModal({
     description: trip.description || "",
   });
 
+  // Cruise review fields (separate from trip form)
+  const [cruiseReview, setCruiseReview] = useState({
+    review: "",
+    qualityRating: null as number | null,
+    valueRating: null as number | null,
+    serviceRating: null as number | null,
+    foodRating: null as number | null,
+    entertainmentRating: null as number | null,
+  });
+
+  // Check if cruise info is complete when Cruise is selected
+  const isCruise = f.transportationType === "Cruise";
+  const cruiseLineValue = f.cruiseLine === OTHER_CRUISE_LINE ? f.customCruiseLine : f.cruiseLine;
+  const cruiseShipValue = f.cruiseShip === "Other" ? f.customCruiseShip : f.cruiseShip;
+  const isCruiseComplete = !isCruise || (!!cruiseLineValue && !!cruiseShipValue);
+
   const canSave =
     f.name &&
     f.city &&
     f.country &&
     f.transportationType &&
+    isCruiseComplete &&
     f.startDate &&
     f.endDate;
 
@@ -107,6 +149,13 @@ export default function EditTripModal({
   const availableOriginStates = useMemo(
     () => sortAZWithOtherLast(getStates(f.originCountry)),
     [f.originCountry]
+  );
+
+  // Cruise line options
+  const cruiseLineOptions = useMemo(() => getCruiseLineNames(), []);
+  const availableShips = useMemo(
+    () => getShipsForCruiseLine(f.cruiseLine),
+    [f.cruiseLine]
   );
 
   /* -------------------- EXISTING MEDIA -------------------- */
@@ -322,6 +371,8 @@ export default function EditTripModal({
         originState: f.originState || null,
         originCountry: f.originCountry || null,
         transportationType: f.transportationType || null,
+        cruiseLine: isCruise ? cruiseLineValue || null : null,
+        cruiseShip: isCruise ? cruiseShipValue || null : null,
         accommodationType: f.accommodationType || null,
         specificAddress: f.specificAddress || null,
         startDate: f.startDate,
@@ -329,6 +380,39 @@ export default function EditTripModal({
         description: f.description || null,
         updatedAt: Date.now(),
       } as any);
+
+      // If cruise is selected and has review content, save to cruises subcollection
+      if (isCruise && cruiseLineValue && cruiseShipValue) {
+        const hasReviewContent = cruiseReview.review ||
+          cruiseReview.qualityRating ||
+          cruiseReview.valueRating ||
+          cruiseReview.serviceRating ||
+          cruiseReview.foodRating ||
+          cruiseReview.entertainmentRating;
+
+        if (hasReviewContent) {
+          const now = Date.now();
+          await addDoc(collection(db, "trips", trip.id, "cruises"), {
+            name: `${cruiseLineValue} - ${cruiseShipValue}`,
+            cruiseLine: cruiseLineValue,
+            shipName: cruiseShipValue,
+            startDate: f.startDate || null,
+            endDate: f.endDate || null,
+            city: f.city || null,
+            state: f.state || null,
+            country: f.country,
+            review: cruiseReview.review || null,
+            qualityRating: cruiseReview.qualityRating,
+            valueRating: cruiseReview.valueRating,
+            serviceRating: cruiseReview.serviceRating,
+            foodRating: cruiseReview.foodRating,
+            entertainmentRating: cruiseReview.entertainmentRating,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+
       onClose();
     } finally {
       setSaving(false);
@@ -703,9 +787,22 @@ export default function EditTripModal({
               <select
                 className="input"
                 value={f.transportationType}
-                onChange={(e) =>
-                  setF({ ...f, transportationType: e.target.value })
-                }
+                onChange={(e) => {
+                  const newTransport = e.target.value;
+                  // Reset cruise fields when changing transportation type
+                  if (newTransport !== "Cruise") {
+                    setF({
+                      ...f,
+                      transportationType: newTransport,
+                      cruiseLine: "",
+                      cruiseShip: "",
+                      customCruiseLine: "",
+                      customCruiseShip: "",
+                    });
+                  } else {
+                    setF({ ...f, transportationType: newTransport });
+                  }
+                }}
               >
                 <option value="">Select transportation</option>
                 {TRANSPORT_OPTIONS.map((opt) => (
@@ -715,6 +812,219 @@ export default function EditTripModal({
                 ))}
               </select>
             </div>
+
+            {/* Cruise Line Selection (only shown when Cruise is selected) */}
+            {isCruise && (
+              <>
+                <div className="md:col-span-2">
+                  <label className="label">Cruise Line *</label>
+                  <select
+                    className="input"
+                    value={f.cruiseLine}
+                    onChange={(e) => {
+                      const newCruiseLine = e.target.value;
+                      // Reset ship selection when cruise line changes
+                      setF({
+                        ...f,
+                        cruiseLine: newCruiseLine,
+                        cruiseShip: "",
+                        customCruiseShip: "",
+                      });
+                    }}
+                  >
+                    <option value="">Select cruise line</option>
+                    {cruiseLineOptions.map((line) => (
+                      <option key={line} value={line}>
+                        {line}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Custom Cruise Line Input (when "Other" is selected) */}
+                {f.cruiseLine === OTHER_CRUISE_LINE && (
+                  <div className="md:col-span-3">
+                    <label className="label">Enter Cruise Line Name *</label>
+                    <input
+                      className="input"
+                      placeholder="Enter cruise line name"
+                      value={f.customCruiseLine}
+                      onChange={(e) =>
+                        setF({ ...f, customCruiseLine: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Ship Selection (only shown when cruise line is selected and not "Other") */}
+                {f.cruiseLine && f.cruiseLine !== OTHER_CRUISE_LINE && (
+                  <div className="md:col-span-3">
+                    <label className="label">Ship Name *</label>
+                    <select
+                      className="input"
+                      value={f.cruiseShip}
+                      onChange={(e) =>
+                        setF({ ...f, cruiseShip: e.target.value, customCruiseShip: "" })
+                      }
+                    >
+                      <option value="">Select ship</option>
+                      {availableShips.map((ship) => (
+                        <option key={ship} value={ship}>
+                          {ship}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Custom Ship Input (when "Other" ship is selected or cruise line is "Other") */}
+                {(f.cruiseShip === "Other" || f.cruiseLine === OTHER_CRUISE_LINE) && (
+                  <div className="md:col-span-3">
+                    <label className="label">Enter Ship Name *</label>
+                    <input
+                      className="input"
+                      placeholder="Enter ship name"
+                      value={f.customCruiseShip}
+                      onChange={(e) =>
+                        setF({ ...f, customCruiseShip: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Cruise Review Section */}
+                <div className="md:col-span-3 mt-4 pt-4 border-t border-border">
+                  <h3 className="font-semibold mb-3">Cruise Review (Optional)</h3>
+
+                  {/* Review Text */}
+                  <div className="mb-4">
+                    <label className="label">Your Review</label>
+                    <textarea
+                      className="input min-h-[100px]"
+                      placeholder="Share your cruise experience..."
+                      value={cruiseReview.review}
+                      onChange={(e) =>
+                        setCruiseReview({ ...cruiseReview, review: e.target.value })
+                      }
+                      rows={4}
+                    />
+                  </div>
+
+                  {/* Ratings Grid */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Overall Quality</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            className={`w-8 h-8 rounded transition-colors ${
+                              (cruiseReview.qualityRating ?? 0) >= rating
+                                ? "text-yellow-500"
+                                : "text-gray-300"
+                            }`}
+                            onClick={() =>
+                              setCruiseReview({ ...cruiseReview, qualityRating: rating })
+                            }
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Value for Money</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            className={`w-8 h-8 rounded transition-colors ${
+                              (cruiseReview.valueRating ?? 0) >= rating
+                                ? "text-yellow-500"
+                                : "text-gray-300"
+                            }`}
+                            onClick={() =>
+                              setCruiseReview({ ...cruiseReview, valueRating: rating })
+                            }
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Service</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            className={`w-8 h-8 rounded transition-colors ${
+                              (cruiseReview.serviceRating ?? 0) >= rating
+                                ? "text-yellow-500"
+                                : "text-gray-300"
+                            }`}
+                            onClick={() =>
+                              setCruiseReview({ ...cruiseReview, serviceRating: rating })
+                            }
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Food & Dining</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            className={`w-8 h-8 rounded transition-colors ${
+                              (cruiseReview.foodRating ?? 0) >= rating
+                                ? "text-yellow-500"
+                                : "text-gray-300"
+                            }`}
+                            onClick={() =>
+                              setCruiseReview({ ...cruiseReview, foodRating: rating })
+                            }
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="label">Entertainment</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            className={`w-8 h-8 rounded transition-colors ${
+                              (cruiseReview.entertainmentRating ?? 0) >= rating
+                                ? "text-yellow-500"
+                                : "text-gray-300"
+                            }`}
+                            onClick={() =>
+                              setCruiseReview({ ...cruiseReview, entertainmentRating: rating })
+                            }
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Accommodation */}
             <div className="md:col-span-3">

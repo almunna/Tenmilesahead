@@ -167,6 +167,27 @@ service cloud.firestore {
         allow delete: if isOwner(parentOwner());
       }
 
+      /* ---- cruises subcollection ---- */
+      match /cruises/{cruiseId} {
+        function parentOwner() {
+          return get(/databases/$(database)/documents/trips/$(tripId)).data.ownerId;
+        }
+
+        function validSubitemData() {
+          return request.resource.data.name is string && request.resource.data.name.size() > 0
+            && request.resource.data.city is string
+            && request.resource.data.country is string && request.resource.data.country.size() > 0
+            && request.resource.data.createdAt is number
+            && request.resource.data.updatedAt is number;
+        }
+
+        allow create: if isOwner(parentOwner()) && validSubitemData();
+        // Public read for share links
+        allow read:   if true;
+        allow update: if isOwner(parentOwner()) && validSubitemData();
+        allow delete: if isOwner(parentOwner());
+      }
+
       /* ---- photobooks subcollection ---- */
       match /photobooks/{photobookId} {
         function parentOwner() {

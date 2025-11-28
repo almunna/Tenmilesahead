@@ -14,9 +14,12 @@ export type Trip = {
   originCity?: string | null;
   originState?: string | null;
   originCountry?: string | null;
+  originAddress?: string | null;
 
   // Logistics
   transportationType: string; // *
+  cruiseLine?: string | null; // Cruise line name (when transportationType is "Cruise")
+  cruiseShip?: string | null; // Ship name (when transportationType is "Cruise")
   accommodationType?: string | null; // optional
 
   // Location details
@@ -130,7 +133,7 @@ export type Photobook = {
 };
 
 // Global Reviews types
-export type ReviewType = "Activities" | "Accommodations" | "Restaurants" | "Destinations";
+export type ReviewType = "Activities" | "Accommodations" | "Restaurants" | "Destinations" | "Cruises";
 
 export type Review = {
   id?: string;

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { collection, getDocs, query, orderBy, where, doc, getDoc, deleteDoc, updateDoc, addDoc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { Star, MapPin, Phone, Calendar, ChevronDown, Image as ImageIcon, Hotel, X } from "lucide-react";
 import type { Review, ReviewType, MediaItem } from "@/lib/types";
+import { getCruiseLineNames } from "@/lib/cruiseData";
 import Protected from "@/components/Protected";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -23,6 +25,11 @@ type ReviewWithMedia = Review & {
   organization?: number;
   funFactor?: number;
   ownerUsername?: string; // Journal name of the owner
+  // Cruise-specific fields
+  cruiseLine?: string;
+  shipName?: string;
+  foodRating?: number;
+  entertainmentRating?: number;
 };
 
 type GroupedReview = {
@@ -34,6 +41,9 @@ type GroupedReview = {
   reviews: ReviewWithMedia[];
   coverMediaUrl?: string;
   averageRating?: number;
+  // Cruise-specific fields
+  cruiseLine?: string;
+  shipName?: string;
 };
 
 // Helper function to format date strings without timezone conversion
@@ -67,6 +77,12 @@ function GlobalReviewsInner() {
   const [selectedType, setSelectedType] = useState<string>("All Types");
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+
+  // Cruise-specific filters
+  const [selectedCruiseLine, setSelectedCruiseLine] = useState<string>("All Cruise Lines");
+  const [selectedShipName, setSelectedShipName] = useState<string>("All Ships");
+  const [showCruiseLineDropdown, setShowCruiseLineDropdown] = useState(false);
+  const [showShipNameDropdown, setShowShipNameDropdown] = useState(false);
 
   // Pagination
   const [visibleCount, setVisibleCount] = useState(10);
@@ -121,6 +137,11 @@ function GlobalReviewsInner() {
         // Fetch restaurants
         reviewPromises.push(
           fetchReviewsFromSubcollection(tripId, "restaurants", "Restaurants", tripOwners.get(tripId))
+        );
+
+        // Fetch cruises
+        reviewPromises.push(
+          fetchReviewsFromSubcollection(tripId, "cruises", "Cruises", tripOwners.get(tripId))
         );
       }
 
@@ -214,6 +235,11 @@ function GlobalReviewsInner() {
         safety: data.locationRating || 0,
         organization: 0,
         funFactor: 0,
+        // Cruise-specific fields
+        cruiseLine: data.cruiseLine || undefined,
+        shipName: data.shipName || undefined,
+        foodRating: data.foodRating || 0,
+        entertainmentRating: data.entertainmentRating || 0,
       });
     }
 
@@ -235,7 +261,10 @@ function GlobalReviewsInner() {
     const grouped = new Map<string, GroupedReview>();
 
     reviews.forEach((review) => {
-      const key = `${review.placeName}|${review.city}|${review.country}|${review.type}`;
+      // For cruises, include cruise line and ship name in the grouping key
+      const key = review.type === "Cruises"
+        ? `${review.placeName}|${review.cruiseLine || ""}|${review.shipName || ""}|${review.country}|${review.type}`
+        : `${review.placeName}|${review.city}|${review.country}|${review.type}`;
 
       if (grouped.has(key)) {
         const existing = grouped.get(key)!;
@@ -250,6 +279,9 @@ function GlobalReviewsInner() {
           reviews: [review],
           coverMediaUrl: review.mediaItems[0]?.downloadURL,
           averageRating: review.ratings.overall,
+          // Cruise-specific fields
+          cruiseLine: review.cruiseLine,
+          shipName: review.shipName,
         });
       }
     });
@@ -273,18 +305,42 @@ function GlobalReviewsInner() {
     new Set(allReviews.map((r) => r.city).filter((c) => c))
   ).sort();
 
+  // Get unique cruise lines and ship names from reviews
+  const uniqueCruiseLines = Array.from(
+    new Set(allReviews.filter((r) => r.type === "Cruises" && r.cruiseLine).map((r) => r.cruiseLine!))
+  ).sort();
+
+  const uniqueShipNames = Array.from(
+    new Set(
+      allReviews
+        .filter((r) => r.type === "Cruises" && r.shipName)
+        .filter((r) => selectedCruiseLine === "All Cruise Lines" || r.cruiseLine === selectedCruiseLine)
+        .map((r) => r.shipName!)
+    )
+  ).sort();
+
   // Filter grouped reviews based on selected filters
   const filteredReviews = groupedReviews.filter((group) => {
     const matchesLocation =
       selectedLocation === "All Locations" || group.city === selectedLocation;
     const matchesType = selectedType === "All Types" || group.type === selectedType;
+
+    // Apply cruise-specific filters only when Cruises type is selected
+    if (selectedType === "Cruises") {
+      const matchesCruiseLine =
+        selectedCruiseLine === "All Cruise Lines" || group.cruiseLine === selectedCruiseLine;
+      const matchesShipName =
+        selectedShipName === "All Ships" || group.shipName === selectedShipName;
+      return matchesLocation && matchesType && matchesCruiseLine && matchesShipName;
+    }
+
     return matchesLocation && matchesType;
   });
 
   // Reset pagination when filters change
   useEffect(() => {
     setVisibleCount(10);
-  }, [selectedLocation, selectedType]);
+  }, [selectedLocation, selectedType, selectedCruiseLine, selectedShipName]);
 
   // Flatten filtered reviews to individual review cards for pagination
   const allFilteredReviewCards = filteredReviews.flatMap((group) =>
@@ -306,6 +362,7 @@ function GlobalReviewsInner() {
         "Activities": "activities",
         "Accommodations": "accommodations",
         "Restaurants": "restaurants",
+        "Cruises": "cruises",
       };
 
       const subcollection = subcollectionMap[review.type];
@@ -329,6 +386,7 @@ function GlobalReviewsInner() {
         "Activities": "activities",
         "Accommodations": "accommodations",
         "Restaurants": "restaurants",
+        "Cruises": "cruises",
       };
 
       const subcollection = subcollectionMap[updatedReview.type];
@@ -476,10 +534,110 @@ function GlobalReviewsInner() {
                     >
                       Restaurants
                     </button>
+                    <button
+                      onClick={() => {
+                        setSelectedType("Cruises");
+                        setShowTypeDropdown(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-white hover:bg-[#3d5266] transition-colors"
+                    >
+                      Cruises
+                    </button>
                   </div>
                 )}
               </div>
             </div>
+
+              {/* Cruise-specific filters (only shown when Cruises is selected) */}
+              {selectedType === "Cruises" && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 mt-4 pt-4 border-t border-white/10">
+                  {/* Cruise Line Filter */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowCruiseLineDropdown(!showCruiseLineDropdown);
+                        setShowShipNameDropdown(false);
+                        setShowLocationDropdown(false);
+                        setShowTypeDropdown(false);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#3d5266] text-white rounded-lg hover:bg-[#4a5f77] transition-colors w-full sm:min-w-[200px] justify-between"
+                    >
+                      <span className="text-sm">{selectedCruiseLine}</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+
+                    {showCruiseLineDropdown && (
+                      <div className="absolute top-full mt-2 w-full bg-[#2c3e50] rounded-lg shadow-xl border border-white/10 overflow-hidden z-50 max-h-64 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setSelectedCruiseLine("All Cruise Lines");
+                            setSelectedShipName("All Ships");
+                            setShowCruiseLineDropdown(false);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-white hover:bg-[#3d5266] transition-colors"
+                        >
+                          ✓ All Cruise Lines
+                        </button>
+                        {uniqueCruiseLines.map((line) => (
+                          <button
+                            key={line}
+                            onClick={() => {
+                              setSelectedCruiseLine(line);
+                              setSelectedShipName("All Ships");
+                              setShowCruiseLineDropdown(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-[#3d5266] transition-colors"
+                          >
+                            {line}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ship Name Filter */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowShipNameDropdown(!showShipNameDropdown);
+                        setShowCruiseLineDropdown(false);
+                        setShowLocationDropdown(false);
+                        setShowTypeDropdown(false);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-[#3d5266] text-white rounded-lg hover:bg-[#4a5f77] transition-colors w-full sm:min-w-[200px] justify-between"
+                    >
+                      <span className="text-sm">{selectedShipName}</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+
+                    {showShipNameDropdown && (
+                      <div className="absolute top-full mt-2 w-full bg-[#2c3e50] rounded-lg shadow-xl border border-white/10 overflow-hidden z-50 max-h-64 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setSelectedShipName("All Ships");
+                            setShowShipNameDropdown(false);
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-white hover:bg-[#3d5266] transition-colors"
+                        >
+                          ✓ All Ships
+                        </button>
+                        {uniqueShipNames.map((ship) => (
+                          <button
+                            key={ship}
+                            onClick={() => {
+                              setSelectedShipName(ship);
+                              setShowShipNameDropdown(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-[#3d5266] transition-colors"
+                          >
+                            {ship}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
 
           <p className="text-sm text-white/70 mt-2">
@@ -952,11 +1110,134 @@ function EditReviewModal({
   const [editedReview, setEditedReview] = useState<ReviewWithMedia>({ ...review });
   const [saving, setSaving] = useState(false);
 
+  // Photo management state
+  const [existingMedia, setExistingMedia] = useState<MediaItem[]>(review.mediaItems || []);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [coverMediaId, setCoverMediaId] = useState<string | null>(review.coverMediaId || (review.mediaItems[0]?.id || null));
+  const [newCoverKey, setNewCoverKey] = useState<string | null>(null);
+
+  const fileKey = (f: File) => `${f.name}__${f.size}__${f.lastModified}`;
+
+  // Generate previews for new files
+  useEffect(() => {
+    setPreviews((prev) => {
+      const next = { ...prev };
+      for (const f of newFiles) {
+        const k = fileKey(f);
+        if (!next[k]) next[k] = URL.createObjectURL(f);
+      }
+      for (const k of Object.keys(next)) {
+        if (!newFiles.find((f) => fileKey(f) === k)) {
+          URL.revokeObjectURL(next[k]);
+          delete next[k];
+        }
+      }
+      return next;
+    });
+  }, [newFiles]);
+
+  // Cleanup previews on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(previews).forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setNewFiles((prev) => [...prev, ...files]);
+  };
+
+  const removeNewFile = (key: string) => {
+    setNewFiles((prev) => prev.filter((f) => fileKey(f) !== key));
+    if (newCoverKey === key) setNewCoverKey(null);
+  };
+
+  const removeExistingMedia = async (mediaId: string) => {
+    // Mark for deletion (will be deleted on save)
+    setExistingMedia((prev) => prev.filter((m) => m.id !== mediaId));
+    if (coverMediaId === mediaId) {
+      const remaining = existingMedia.filter((m) => m.id !== mediaId);
+      setCoverMediaId(remaining[0]?.id || null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave(editedReview);
+      const subcollectionMap: Record<ReviewType, string> = {
+        "Destinations": "destinations",
+        "Activities": "activities",
+        "Accommodations": "accommodations",
+        "Restaurants": "restaurants",
+        "Cruises": "cruises",
+      };
+      const subcollection = subcollectionMap[review.type];
+
+      // Upload new files
+      let finalCoverMediaId = coverMediaId;
+
+      for (const file of newFiles) {
+        const k = fileKey(file);
+        const mediaRef = doc(collection(db, "trips", review.tripId, "media"));
+        const mediaId = mediaRef.id;
+
+        const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+        const path = `trip_media/${review.ownerId}/${review.tripId}/${mediaId}/${safeName}`;
+
+        const sref = storageRef(storage, path);
+        await uploadBytes(sref, file, { contentType: file.type });
+        const downloadURL = await getDownloadURL(sref);
+
+        await setDoc(mediaRef, {
+          tripId: review.tripId,
+          type: file.type.startsWith("video/") ? "video" : "image",
+          storagePath: path,
+          downloadURL,
+          createdAt: Date.now(),
+          caption: `${review.type} • ${review.placeName}`,
+          linkedSubcollection: subcollection,
+          linkedId: review.id,
+          fileName: file.name,
+          size: file.size,
+          contentType: file.type,
+        });
+
+        // If this new file is marked as cover
+        if (newCoverKey === k) {
+          finalCoverMediaId = mediaId;
+        }
+
+        // If no cover selected yet, use first uploaded image
+        if (!finalCoverMediaId && file.type.startsWith("image/")) {
+          finalCoverMediaId = mediaId;
+        }
+      }
+
+      // Delete removed existing media
+      const removedMedia = review.mediaItems.filter(
+        (m) => !existingMedia.find((em) => em.id === m.id)
+      );
+      for (const media of removedMedia) {
+        try {
+          if (media.storagePath) {
+            await deleteObject(storageRef(storage, media.storagePath));
+          }
+          await deleteDoc(doc(db, "trips", review.tripId, "media", media.id!));
+        } catch (err) {
+          console.error("Error deleting media:", err);
+        }
+      }
+
+      // Update the review with new cover
+      const updatedReview = {
+        ...editedReview,
+        coverMediaId: finalCoverMediaId,
+      };
+
+      await onSave(updatedReview);
     } finally {
       setSaving(false);
     }
@@ -1067,6 +1348,140 @@ function EditReviewModal({
             </div>
           </div>
 
+          {/* Photos Section */}
+          <div className="space-y-4">
+            <h3 className="text-base sm:text-lg font-semibold text-white">Photos</h3>
+
+            {/* Photo Upload */}
+            <div
+              className="rounded-lg p-4 text-center bg-[#3d5266] border-2 border-dashed border-white/20 hover:border-[#66bfcc] transition-colors cursor-pointer"
+            >
+              <label className="cursor-pointer block">
+                <div className="text-sm font-medium text-white mb-1">
+                  Click to add photos
+                </div>
+                <div className="text-xs text-white/60">
+                  JPG, PNG, or video files
+                </div>
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+
+            {/* Existing Photos */}
+            {existingMedia.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-white/80 mb-2">Current Photos</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {existingMedia.map((media) => (
+                    <div key={media.id} className="relative group">
+                      <div className="aspect-square bg-[#3d5266] rounded-lg overflow-hidden">
+                        {media.type === "image" ? (
+                          <img
+                            src={media.downloadURL}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <video
+                            src={media.downloadURL}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1">
+                        {media.type === "image" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCoverMediaId(media.id!);
+                              setNewCoverKey(null);
+                            }}
+                            className={`text-xs px-2 py-1 rounded ${
+                              coverMediaId === media.id && !newCoverKey
+                                ? "bg-green-600 text-white"
+                                : "bg-white/20 text-white hover:bg-white/30"
+                            }`}
+                          >
+                            {coverMediaId === media.id && !newCoverKey ? "✓ Cover" : "Set Cover"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeExistingMedia(media.id!)}
+                          className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* New Photos to Upload */}
+            {newFiles.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-white/80 mb-2">New Photos</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {newFiles.map((file) => {
+                    const k = fileKey(file);
+                    const isImage = file.type.startsWith("image/");
+                    return (
+                      <div key={k} className="relative group">
+                        <div className="aspect-square bg-[#3d5266] rounded-lg overflow-hidden">
+                          {isImage ? (
+                            <img
+                              src={previews[k]}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <video
+                              src={previews[k]}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1">
+                          {isImage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewCoverKey(k);
+                                setCoverMediaId(null);
+                              }}
+                              className={`text-xs px-2 py-1 rounded ${
+                                newCoverKey === k
+                                  ? "bg-green-600 text-white"
+                                  : "bg-white/20 text-white hover:bg-white/30"
+                              }`}
+                            >
+                              {newCoverKey === k ? "✓ Cover" : "Set Cover"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeNewFile(k)}
+                            className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-white/10">
             <button
@@ -1161,6 +1576,7 @@ function AddReviewModal({
         "Activities": "activities",
         "Accommodations": "accommodations",
         "Restaurants": "restaurants",
+        "Cruises": "cruises",
       };
 
       const subcollection = subcollectionMap[type];

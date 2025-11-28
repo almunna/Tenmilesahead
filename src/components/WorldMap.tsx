@@ -90,25 +90,23 @@ export default function WorldMap({
       // Dynamic import of Leaflet for markers
       const L = await import("leaflet");
       const validCoordinates: any[] = [];
+
+      // FIRST: Collect all visited countries from trips (only requires country field)
       const visitedCountries = new Set<string>();
-
-      console.log(`Adding markers for ${trips.length} trips`);
-
       for (const trip of trips) {
-        console.log(`Processing trip: ${trip.name}, City: ${trip.city}, Country: ${trip.country}`);
-
-        if (!trip.city || !trip.country) {
-          console.warn(`Skipping trip ${trip.name} - missing city or country`);
-          continue;
-        }
-
-        // Add country to visited set
         if (trip.country) {
           visitedCountries.add(trip.country.toLowerCase().trim());
         }
+      }
+
+      // SECOND: Add markers for trips that have city coordinates
+      for (const trip of trips) {
+        // Skip trips without city for marker placement (but country already collected above)
+        if (!trip.city || !trip.country) {
+          continue;
+        }
 
         const coordinates = await getCityCoordinates(trip.city, trip.country);
-        console.log(`Coordinates for ${trip.city}, ${trip.country}:`, coordinates);
 
         if (coordinates && map.current) {
           // Create custom red pin icon
@@ -162,75 +160,274 @@ export default function WorldMap({
           markersByTripId.current.set(trip.id, marker);
 
           validCoordinates.push([coordinates[1], coordinates[0]]);
-          console.log(`Added marker for ${trip.city}, ${trip.country}`);
-        } else {
-          console.warn(`Failed to add marker for ${trip.city}, ${trip.country}`);
         }
       }
-
-      console.log(`Total markers added: ${validCoordinates.length}`);
-      console.log(`Visited countries:`, Array.from(visitedCountries));
 
       // Highlight visited countries
       if (visitedCountries.size > 0 && map.current) {
         try {
-          // Fetch country boundaries GeoJSON
-          const response = await fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson');
-          const countriesGeoJSON = await response.json();
+          // Fetch country boundaries GeoJSON (using smaller, simplified version)
+          const response = await fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json');
 
-          // Country name mapping for common variations
+          if (!response.ok) {
+            console.error('Failed to fetch GeoJSON:', response.status);
+            return;
+          }
+
+          const countriesGeoJSON = await response.json();
+          console.log('Visited countries from DB:', Array.from(visitedCountries));
+
+          // Comprehensive country name mapping for GeoJSON matching
+          // Maps our app country names (lowercase) to GeoJSON ADMIN field values
           const countryNameMap: { [key: string]: string[] } = {
+            // Americas
             'united states': ['united states of america', 'usa', 'us', 'united states'],
-            'united kingdom': ['united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales'],
-            'south korea': ['south korea', 'korea, republic of', 'republic of korea'],
-            'north korea': ['north korea', 'korea, democratic people\'s republic of'],
-            'czech republic': ['czech republic', 'czechia'],
-            'netherlands': ['netherlands', 'holland'],
-            'india': ['india', 'republic of india'],
-            'china': ['china', 'people\'s republic of china'],
+            'usa': ['united states of america'],
+            'canada': ['canada'],
+            'mexico': ['mexico', 'united mexican states'],
+            'brazil': ['brazil', 'federative republic of brazil'],
+            'argentina': ['argentina'],
+            'chile': ['chile'],
+            'colombia': ['colombia'],
+            'peru': ['peru'],
+            'venezuela': ['venezuela'],
+            'ecuador': ['ecuador'],
+            'bolivia': ['bolivia'],
+            'paraguay': ['paraguay'],
+            'uruguay': ['uruguay'],
+            'costa rica': ['costa rica'],
+            'panama': ['panama'],
+            'guatemala': ['guatemala'],
+            'honduras': ['honduras'],
+            'el salvador': ['el salvador'],
+            'nicaragua': ['nicaragua'],
+            'belize': ['belize'],
+            'cuba': ['cuba'],
+            'dominican republic': ['dominican republic'],
+            'haiti': ['haiti'],
+            'jamaica': ['jamaica'],
+            'puerto rico': ['puerto rico'],
+            'bahamas': ['the bahamas', 'bahamas'],
+            'barbados': ['barbados'],
+            'trinidad and tobago': ['trinidad and tobago'],
+            'antigua and barbuda': ['antigua and barbuda'],
+            'saint lucia': ['saint lucia'],
+            'st. lucia': ['saint lucia'],
+            'st lucia': ['saint lucia'],
+            'grenada': ['grenada'],
+            'saint kitts and nevis': ['saint kitts and nevis'],
+            'st. kitts and nevis': ['saint kitts and nevis'],
+            'dominica': ['dominica'],
+            'saint vincent and the grenadines': ['saint vincent and the grenadines'],
+            'anguilla': ['anguilla'],
+            'aruba': ['aruba'],
+            'bonaire': ['bonaire', 'caribbean netherlands'],
+            'curacao': ['curacao', 'curaçao'],
+            'curaçao': ['curacao', 'curaçao'],
+            'bermuda': ['bermuda'],
+            'cayman islands': ['cayman islands'],
+            'turks and caicos islands': ['turks and caicos islands'],
+            'british virgin islands': ['british virgin islands'],
+            'u.s. virgin islands': ['united states virgin islands', 'u.s. virgin islands'],
+            'virgin islands': ['united states virgin islands', 'british virgin islands'],
+            'guadeloupe': ['guadeloupe'],
+            'martinique': ['martinique'],
+            'sint maarten': ['sint maarten'],
+            'st. maarten': ['sint maarten'],
+            'saint martin': ['saint martin', 'sint maarten'],
+            'st. martin': ['saint martin', 'sint maarten'],
+            // Europe
+            'united kingdom': ['united kingdom', 'uk', 'great britain'],
+            'uk': ['united kingdom'],
+            'england': ['united kingdom'],
+            'scotland': ['united kingdom'],
+            'wales': ['united kingdom'],
+            'northern ireland': ['united kingdom'],
+            'ireland': ['ireland'],
             'france': ['france', 'french republic'],
             'germany': ['germany', 'federal republic of germany'],
             'italy': ['italy', 'italian republic'],
             'spain': ['spain', 'kingdom of spain'],
-            'canada': ['canada'],
-            'mexico': ['mexico', 'united mexican states'],
-            'brazil': ['brazil', 'federative republic of brazil'],
-            'australia': ['australia', 'commonwealth of australia'],
-            'japan': ['japan'],
-            'thailand': ['thailand', 'kingdom of thailand'],
-            'bangladesh': ['bangladesh', 'people\'s republic of bangladesh'],
+            'portugal': ['portugal'],
+            'netherlands': ['netherlands', 'holland'],
+            'holland': ['netherlands'],
             'belgium': ['belgium', 'kingdom of belgium'],
-            'anguilla': ['anguilla'],
-            'aruba': ['aruba'],
+            'luxembourg': ['luxembourg'],
+            'switzerland': ['switzerland'],
+            'austria': ['austria'],
+            'greece': ['greece'],
+            'poland': ['poland'],
+            'czech republic': ['czech republic', 'czechia'],
+            'czechia': ['czech republic', 'czechia'],
+            'slovakia': ['slovakia'],
+            'hungary': ['hungary'],
+            'croatia': ['croatia'],
+            'slovenia': ['slovenia'],
+            'romania': ['romania'],
+            'bulgaria': ['bulgaria'],
+            'serbia': ['serbia', 'republic of serbia'],
+            'montenegro': ['montenegro'],
+            'bosnia and herzegovina': ['bosnia and herzegovina'],
+            'albania': ['albania'],
+            'macedonia': ['north macedonia', 'macedonia'],
+            'north macedonia': ['north macedonia'],
+            'denmark': ['denmark'],
+            'sweden': ['sweden'],
+            'norway': ['norway'],
+            'finland': ['finland'],
+            'iceland': ['iceland'],
+            'estonia': ['estonia'],
+            'latvia': ['latvia'],
+            'lithuania': ['lithuania'],
+            'russia': ['russia', 'russian federation'],
+            'ukraine': ['ukraine'],
+            'belarus': ['belarus'],
+            'moldova': ['moldova', 'republic of moldova'],
+            'malta': ['malta'],
+            'cyprus': ['cyprus'],
+            'monaco': ['monaco'],
+            'andorra': ['andorra'],
+            'san marino': ['san marino'],
+            'liechtenstein': ['liechtenstein'],
+            'vatican city': ['vatican'],
+            // Asia
+            'china': ['china', 'people\'s republic of china'],
+            'japan': ['japan'],
+            'south korea': ['south korea', 'korea, republic of', 'republic of korea'],
+            'korea': ['south korea', 'republic of korea'],
+            'north korea': ['north korea', 'democratic people\'s republic of korea'],
+            'taiwan': ['taiwan'],
+            'hong kong': ['hong kong'],
+            'macau': ['macau', 'macao'],
+            'india': ['india', 'republic of india'],
+            'pakistan': ['pakistan'],
+            'bangladesh': ['bangladesh', 'people\'s republic of bangladesh'],
+            'sri lanka': ['sri lanka'],
+            'nepal': ['nepal'],
+            'bhutan': ['bhutan'],
+            'maldives': ['maldives'],
+            'thailand': ['thailand', 'kingdom of thailand'],
+            'vietnam': ['vietnam', 'viet nam'],
+            'cambodia': ['cambodia'],
+            'laos': ['laos', 'lao people\'s democratic republic'],
+            'myanmar': ['myanmar', 'burma'],
+            'burma': ['myanmar', 'burma'],
+            'malaysia': ['malaysia'],
+            'singapore': ['singapore'],
+            'indonesia': ['indonesia'],
+            'philippines': ['philippines'],
+            'brunei': ['brunei', 'brunei darussalam'],
+            'timor-leste': ['timor-leste', 'east timor'],
+            'mongolia': ['mongolia'],
+            // Middle East
+            'turkey': ['turkey', 'türkiye'],
+            'israel': ['israel'],
+            'palestine': ['palestine', 'palestinian territories'],
+            'jordan': ['jordan'],
+            'lebanon': ['lebanon'],
+            'syria': ['syria', 'syrian arab republic'],
+            'iraq': ['iraq'],
+            'iran': ['iran', 'islamic republic of iran'],
+            'saudi arabia': ['saudi arabia'],
+            'united arab emirates': ['united arab emirates', 'uae'],
+            'uae': ['united arab emirates'],
+            'qatar': ['qatar'],
+            'bahrain': ['bahrain'],
+            'kuwait': ['kuwait'],
+            'oman': ['oman'],
+            'yemen': ['yemen'],
+            // Central Asia
+            'kazakhstan': ['kazakhstan'],
+            'uzbekistan': ['uzbekistan'],
+            'turkmenistan': ['turkmenistan'],
+            'tajikistan': ['tajikistan'],
+            'kyrgyzstan': ['kyrgyzstan'],
+            'afghanistan': ['afghanistan'],
+            // Africa
+            'egypt': ['egypt'],
+            'morocco': ['morocco'],
+            'algeria': ['algeria'],
+            'tunisia': ['tunisia'],
+            'libya': ['libya'],
+            'sudan': ['sudan'],
+            'south sudan': ['south sudan'],
+            'ethiopia': ['ethiopia'],
+            'kenya': ['kenya'],
+            'tanzania': ['tanzania', 'united republic of tanzania'],
+            'uganda': ['uganda'],
+            'rwanda': ['rwanda'],
+            'south africa': ['south africa'],
+            'nigeria': ['nigeria'],
+            'ghana': ['ghana'],
+            'senegal': ['senegal'],
+            'ivory coast': ['ivory coast', 'côte d\'ivoire', 'cote d\'ivoire'],
+            'côte d\'ivoire': ['ivory coast', 'côte d\'ivoire', 'cote d\'ivoire'],
+            'cameroon': ['cameroon'],
+            'democratic republic of the congo': ['democratic republic of the congo', 'drc', 'congo'],
+            'congo': ['congo', 'republic of the congo', 'democratic republic of the congo'],
+            'angola': ['angola'],
+            'mozambique': ['mozambique'],
+            'zimbabwe': ['zimbabwe'],
+            'zambia': ['zambia'],
+            'botswana': ['botswana'],
+            'namibia': ['namibia'],
+            'madagascar': ['madagascar'],
+            'mauritius': ['mauritius'],
+            'seychelles': ['seychelles'],
+            // Oceania
+            'australia': ['australia', 'commonwealth of australia'],
+            'new zealand': ['new zealand'],
+            'papua new guinea': ['papua new guinea'],
+            'fiji': ['fiji'],
+            'samoa': ['samoa'],
+            'tonga': ['tonga'],
+            'vanuatu': ['vanuatu'],
+            'solomon islands': ['solomon islands'],
+            'new caledonia': ['new caledonia'],
+            'french polynesia': ['french polynesia'],
+            'guam': ['guam'],
+            'hawaii': ['united states of america'], // Hawaii is part of USA
+            'tahiti': ['french polynesia'],
+            'bora bora': ['french polynesia'],
           };
-
-          // Log all available countries in GeoJSON for debugging
-          console.log('Sample GeoJSON feature properties:', countriesGeoJSON.features.slice(0, 3).map((f: any) => f.properties));
-          console.log('Sample GeoJSON countries:', countriesGeoJSON.features.slice(0, 10).map((f: any) => f.properties.ADMIN));
-          console.log('All GeoJSON countries:', countriesGeoJSON.features.map((f: any) => f.properties.ADMIN).sort());
 
           // Filter GeoJSON to only include visited countries
           const visitedFeatures = countriesGeoJSON.features.filter((feature: any) => {
-            const geoCountryName = feature.properties.ADMIN || '';
-            const geoCountryLower = geoCountryName.toLowerCase();
-
-            console.log(`Checking GeoJSON country: "${geoCountryName}" (lowercase: "${geoCountryLower}")`);
+            // Try multiple property names for country name
+            const geoCountryName = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN || '';
+            const geoCountryLower = geoCountryName.toLowerCase().trim();
 
             // Check direct match
             if (visitedCountries.has(geoCountryLower)) {
-              console.log(`✓ Direct match found: ${geoCountryLower}`);
+              console.log('Direct match found:', geoCountryLower);
               return true;
             }
 
-            // Check against mapping
+            // Check against mapping - both directions
             for (const visited of visitedCountries) {
+              // Get mapped names for the visited country
               const mappedNames = countryNameMap[visited] || [visited];
               for (const mappedName of mappedNames) {
-                const mappedLower = mappedName.toLowerCase();
-                if (geoCountryLower === mappedLower ||
-                    (geoCountryLower.includes(mappedLower) && mappedLower.length > 3) ||
-                    (mappedLower.includes(geoCountryLower) && geoCountryLower.length > 3)) {
-                  console.log(`✓ Mapped match found: ${visited} -> ${geoCountryName}`);
+                const mappedLower = mappedName.toLowerCase().trim();
+                if (geoCountryLower === mappedLower) {
+                  console.log('Mapped match found:', visited, '->', geoCountryLower);
+                  return true;
+                }
+                // Partial matching for longer names
+                if (mappedLower.length > 4 && geoCountryLower.includes(mappedLower)) {
+                  console.log('Partial match found:', visited, 'in', geoCountryLower);
+                  return true;
+                }
+                if (geoCountryLower.length > 4 && mappedLower.includes(geoCountryLower)) {
+                  console.log('Partial match found:', geoCountryLower, 'in', mappedLower);
+                  return true;
+                }
+              }
+
+              // Also check if the GeoJSON name maps to our visited country
+              for (const [key, values] of Object.entries(countryNameMap)) {
+                if (values.some(v => v.toLowerCase() === geoCountryLower) && visited === key) {
+                  console.log('Reverse map match:', geoCountryLower, '->', key);
                   return true;
                 }
               }
@@ -239,8 +436,7 @@ export default function WorldMap({
             return false;
           });
 
-          console.log(`Found ${visitedFeatures.length} country boundaries to highlight`);
-          console.log(`Matched countries:`, visitedFeatures.map((f: any) => f.properties.ADMIN));
+          console.log('Found', visitedFeatures.length, 'matching countries to shade');
 
           // Add highlighted country layers
           visitedFeatures.forEach((feature: any) => {
@@ -351,39 +547,31 @@ async function getCityCoordinates(
 
   // Check cache first
   if (geocodeCache.has(cacheKey)) {
-    console.log(`Using cached coordinates for ${city}, ${country}`);
     return geocodeCache.get(cacheKey)!;
   }
 
   try {
     // Call our API route instead of Nominatim directly (avoids CORS)
-    console.log(`Fetching coordinates for: ${city}, ${country}`);
-
     const response = await fetch(
       `/api/geocode?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}`
     );
 
     if (!response.ok) {
-      console.warn(`Geocoding HTTP error for ${city}, ${country}: ${response.status}`);
       geocodeCache.set(cacheKey, null);
       return null;
     }
 
     const data = await response.json();
-    console.log(`Geocoding response for ${city}, ${country}:`, data);
 
     if (data.coordinates) {
       const coords: [number, number] = data.coordinates;
-      console.log(`Successfully geocoded ${city}, ${country} to [${coords[1]}, ${coords[0]}]`);
       geocodeCache.set(cacheKey, coords);
       return coords;
     }
 
-    console.warn(`No results found for ${city}, ${country}`);
     geocodeCache.set(cacheKey, null);
     return null;
   } catch (error) {
-    console.error(`Error geocoding ${city}, ${country}:`, error);
     geocodeCache.set(cacheKey, null);
     return null;
   }

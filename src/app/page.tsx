@@ -470,16 +470,14 @@ async function geocodeLocation(
   location: string
 ): Promise<{ lat: number; lon: number } | null> {
   try {
-    // Using Nominatim (OpenStreetMap) geocoding API - free and no API key required
+    // Parse location string (expected format: "city, state, country" or "city, country")
+    const parts = location.split(",").map((p) => p.trim());
+    const city = parts[0] || "";
+    const country = parts[parts.length - 1] || "";
+
+    // Use our API route to avoid CORS issues
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-        location
-      )}&format=json&limit=1`,
-      {
-        headers: {
-          "User-Agent": "TenMilesAhead/1.0",
-        },
-      }
+      `/api/geocode?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}`
     );
 
     if (!response.ok) {
@@ -487,16 +485,15 @@ async function geocodeLocation(
     }
 
     const data = await response.json();
-    if (data && data.length > 0) {
+    if (data && data.coordinates) {
       return {
-        lat: parseFloat(data[0].lat),
-        lon: parseFloat(data[0].lon),
+        lon: data.coordinates[0],
+        lat: data.coordinates[1],
       };
     }
 
     return null;
   } catch (error) {
-    console.error("Error geocoding location:", error);
     return null;
   }
 }
@@ -642,6 +639,22 @@ function HomeInner() {
           if (x.country) cSet.add(x.country);
           if (x.state) sSet.add(x.state);
           if (x.city) citySet.add(`${x.city}|${x.country || ""}`);
+          // Count transportation from destinations
+          if (x.transportationType) {
+            transportCounts[x.transportationType] = (transportCounts[x.transportationType] || 0) + 1;
+          }
+        });
+
+        // Activities subcollection
+        const actSnap = await getDocs(
+          collection(db, "trips", docSnap.id, "activities")
+        );
+        actSnap.forEach((a) => {
+          const act = a.data() as any;
+          // Count transportation from activities
+          if (act.transportationType) {
+            transportCounts[act.transportationType] = (transportCounts[act.transportationType] || 0) + 1;
+          }
         });
 
         // Accommodations subcollection
@@ -652,6 +665,10 @@ function HomeInner() {
           const acc = a.data() as any;
           if (acc.accommodationType) {
             accommodationCounts[acc.accommodationType] = (accommodationCounts[acc.accommodationType] || 0) + 1;
+          }
+          // Count transportation from accommodations
+          if (acc.transportationType) {
+            transportCounts[acc.transportationType] = (transportCounts[acc.transportationType] || 0) + 1;
           }
         });
 

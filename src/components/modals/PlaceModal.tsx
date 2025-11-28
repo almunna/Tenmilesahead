@@ -41,6 +41,7 @@ type SimplePlace = {
   serviceRating?: number | null;
   locationRating?: number | null;
   accommodationType?: string | null;
+  transportationMode?: string | null;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -57,9 +58,28 @@ function fmtMDY(s?: string | number | null) {
   ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// format to "(555) 456-7890" as you type (max 10 digits: 3 + 3 + 4)
+// Format phone number - supports US format and international numbers (up to 15 digits)
 function formatPhoneUS(input: string): string {
-  const digits = (input || "").replace(/\D+/g, "").slice(0, 10);
+  const digits = (input || "").replace(/\D+/g, "");
+
+  // If more than 10 digits, treat as international - format with country code
+  if (digits.length > 10) {
+    // Allow up to 15 digits (E.164 standard max)
+    const limited = digits.slice(0, 15);
+    // Format as: +XX XXX XXX XXXX or similar groupings
+    if (limited.length <= 11) {
+      // e.g., +1 555 456 7890
+      return `+${limited.slice(0, 1)} ${limited.slice(1, 4)} ${limited.slice(4, 7)} ${limited.slice(7)}`.trim();
+    } else if (limited.length <= 12) {
+      // e.g., +91 98765 43210
+      return `+${limited.slice(0, 2)} ${limited.slice(2, 7)} ${limited.slice(7)}`.trim();
+    } else {
+      // e.g., +123 456 789 0123
+      return `+${limited.slice(0, 3)} ${limited.slice(3, 6)} ${limited.slice(6, 9)} ${limited.slice(9)}`.trim();
+    }
+  }
+
+  // Standard US format for 10 or fewer digits
   const a = digits.slice(0, 3); // area code
   const b = digits.slice(3, 6); // first 3 digits
   const c = digits.slice(6, 10); // last 4 digits
@@ -98,7 +118,8 @@ export default function PlaceModal({
     | "destinations"
     | "activities"
     | "accommodations"
-    | "restaurants";
+    | "restaurants"
+    | "cruises";
   extraLeft?: { key: string; label: string; options: string[] }[];
   extraRight?: { key: string; label: string; options: string[] }[];
   onClose: () => void;
@@ -122,6 +143,7 @@ export default function PlaceModal({
     serviceRating: null,
     locationRating: null,
     accommodationType: "",
+    transportationMode: "",
   });
   const [itemFlipbookOpen, setItemFlipbookOpen] = useState<{
     id: string;
@@ -264,6 +286,7 @@ export default function PlaceModal({
       serviceRating: null,
       locationRating: null,
       accommodationType: "",
+      transportationMode: "",
     });
     setFiles([]);
     setEditingId(null);
@@ -288,6 +311,7 @@ export default function PlaceModal({
       serviceRating: r.serviceRating ?? null,
       locationRating: r.locationRating ?? null,
       accommodationType: r.accommodationType || "",
+      transportationMode: r.transportationMode || "",
       ...extraLeft.reduce(
         (acc, ex) => ({ ...acc, [ex.key]: (r as any)[ex.key] || "" }),
         {}
@@ -342,6 +366,32 @@ export default function PlaceModal({
                   value={form.name || ""}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
+              </div>
+
+              {/* Start Date and End Date - horizontal row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Start Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.startDate || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, startDate: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">End Date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.endDate || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, endDate: e.target.value })
+                    }
+                  />
+                </div>
               </div>
 
               {/* Country, State, City - horizontal row */}
@@ -405,32 +455,6 @@ export default function PlaceModal({
                 </div>
               </div>
 
-              {/* Start Date and End Date - horizontal row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Start Date</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={form.startDate || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, startDate: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="label">End Date</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={form.endDate || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, endDate: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
               {/* Address and Phone - horizontal row */}
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
@@ -461,37 +485,41 @@ export default function PlaceModal({
                 </div>
               </div>
 
-              {/* Accommodation Type and Extra fields - combined in one row */}
-              {(subcollection === "accommodations" || extraLeft.length > 0 || extraRight.length > 0) && (
+              {/* Accommodation Type - only for accommodations subcollection */}
+              {subcollection === "accommodations" && (
                 <div className="grid md:grid-cols-2 gap-3">
-                  {subcollection === "accommodations" && (
-                    <div>
-                      <label className="label">Accommodation Type</label>
-                      <select
-                        className="input"
-                        value={(form as any).accommodationType || ""}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            accommodationType: e.target.value,
-                          } as any)
-                        }
-                      >
-                        <option value="">Select accommodation</option>
-                        <option value="Apartment / Airbnb">
-                          Apartment / Airbnb
-                        </option>
-                        <option value="Camping">Camping</option>
-                        <option value="Cruise">Cruise</option>
-                        <option value="Friend/Family">Friend/Family</option>
-                        <option value="Guesthouse">Guesthouse</option>
-                        <option value="Hostel">Hostel</option>
-                        <option value="Hotel">Hotel</option>
-                        <option value="Resort">Resort</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  )}
+                  <div>
+                    <label className="label">Accommodation Type</label>
+                    <select
+                      className="input"
+                      value={(form as any).accommodationType || ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          accommodationType: e.target.value,
+                        } as any)
+                      }
+                    >
+                      <option value="">Select accommodation</option>
+                      <option value="Apartment / Airbnb">
+                        Apartment / Airbnb
+                      </option>
+                      <option value="Camping">Camping</option>
+                      <option value="Cruise">Cruise</option>
+                      <option value="Friend/Family">Friend/Family</option>
+                      <option value="Guesthouse">Guesthouse</option>
+                      <option value="Hostel">Hostel</option>
+                      <option value="Hotel">Hotel</option>
+                      <option value="Resort">Resort</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Extra fields - combined in one row */}
+              {(extraLeft.length > 0 || extraRight.length > 0) && (
+                <div className="grid md:grid-cols-2 gap-3">
                   {extraLeft.map((ex) => (
                     <div key={ex.key}>
                       <label className="label">{ex.label}</label>

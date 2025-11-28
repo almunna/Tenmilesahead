@@ -572,7 +572,8 @@ export function PlaceModal({
     | "destinations"
     | "activities"
     | "accommodations"
-    | "restaurants";
+    | "restaurants"
+    | "cruises";
   extraLeft?: { key: string; label: string; options: string[] }[];
   extraRight?: { key: string; label: string; options: string[] }[];
   onClose: () => void;
