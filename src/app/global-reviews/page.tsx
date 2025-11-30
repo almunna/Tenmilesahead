@@ -806,7 +806,13 @@ function ReviewCard({
               {review.phone && (
                 <div className="flex items-center gap-2 text-sm text-white/70 mb-2">
                   <Phone className="w-4 h-4 flex-shrink-0" />
-                  <span>{review.phone}</span>
+                  <a
+                    href={`tel:${review.phone.replace(/[^\d+]/g, '')}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:text-[#66bfcc] hover:underline transition-colors"
+                  >
+                    {review.phone}
+                  </a>
                 </div>
               )}
 

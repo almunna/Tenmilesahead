@@ -99,14 +99,61 @@ export default function WorldMap({
         }
       }
 
-      // SECOND: Add markers for trips that have city coordinates
+      // SECOND: Add origin markers (green pins for starting points)
+      for (const trip of trips) {
+        // Only add origin marker if origin city and country are set
+        if (trip.originCity && trip.originCountry) {
+          const originCoords = await getCoordinates(trip.originAddress, trip.originCity, trip.originState, trip.originCountry);
+
+          if (originCoords && map.current) {
+            // Create custom green pin icon for origin
+            const originIcon = L.default.divIcon({
+              html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
+                  fill="#16a34a"
+                  stroke="#15803d"
+                  stroke-width="2"/>
+                <circle cx="16" cy="16" r="6" fill="white"/>
+              </svg>`,
+              className: "custom-leaflet-marker",
+              iconSize: [24, 32],
+              iconAnchor: [12, 32],
+              popupAnchor: [0, -32],
+            });
+
+            // Create origin marker
+            const originMarker = L.default.marker([originCoords[1], originCoords[0]], {
+              icon: originIcon,
+            });
+
+            // Create popup for origin
+            const originPopupContent = `
+              <div style="padding: 8px; min-width: 200px;">
+                <strong style="font-size: 14px; color: #16a34a;">Starting Point</strong><br/>
+                <span style="font-size: 13px;">${trip.name}</span><br/>
+                <span style="color: #666; font-size: 12px;">
+                  ${trip.originCity}${trip.originState ? ", " + trip.originState : ""}, ${trip.originCountry}
+                </span>
+              </div>
+            `;
+
+            originMarker.bindPopup(originPopupContent);
+            originMarker.addTo(map.current);
+            markersRef.current.push(originMarker);
+
+            validCoordinates.push([originCoords[1], originCoords[0]]);
+          }
+        }
+      }
+
+      // THIRD: Add destination markers (red pins) for trips that have city coordinates
       for (const trip of trips) {
         // Skip trips without city for marker placement (but country already collected above)
         if (!trip.city || !trip.country) {
           continue;
         }
 
-        const coordinates = await getCityCoordinates(trip.city, trip.country);
+        const coordinates = await getCoordinates(trip.specificAddress, trip.city, trip.state, trip.country);
 
         if (coordinates && map.current) {
           // Create custom red pin icon
@@ -183,6 +230,7 @@ export default function WorldMap({
             // Americas
             'united states': ['united states of america', 'usa', 'us', 'united states'],
             'usa': ['united states of america'],
+            'united states (usvi)': ['united states of america'], // US Virgin Islands - shade USA
             'canada': ['canada'],
             'mexico': ['mexico', 'united mexican states'],
             'brazil': ['brazil', 'federative republic of brazil'],
@@ -206,7 +254,7 @@ export default function WorldMap({
             'dominican republic': ['dominican republic'],
             'haiti': ['haiti'],
             'jamaica': ['jamaica'],
-            'puerto rico': ['puerto rico'],
+            'puerto rico': ['puerto rico', 'united states of america'],
             'bahamas': ['the bahamas', 'bahamas'],
             'barbados': ['barbados'],
             'trinidad and tobago': ['trinidad and tobago'],
@@ -219,32 +267,40 @@ export default function WorldMap({
             'st. kitts and nevis': ['saint kitts and nevis'],
             'dominica': ['dominica'],
             'saint vincent and the grenadines': ['saint vincent and the grenadines'],
-            'anguilla': ['anguilla'],
-            'aruba': ['aruba'],
-            'bonaire': ['bonaire', 'caribbean netherlands'],
-            'curacao': ['curacao', 'curaçao'],
-            'curaçao': ['curacao', 'curaçao'],
-            'bermuda': ['bermuda'],
-            'cayman islands': ['cayman islands'],
-            'turks and caicos islands': ['turks and caicos islands'],
-            'british virgin islands': ['british virgin islands'],
-            'u.s. virgin islands': ['united states virgin islands', 'u.s. virgin islands'],
+            'saint vincent and grenadines': ['saint vincent and the grenadines'],
+            'anguilla': ['anguilla', 'united kingdom'], // UK territory
+            'aruba': ['aruba', 'netherlands'],
+            'bonaire': ['bonaire', 'caribbean netherlands', 'netherlands'],
+            'curacao': ['curacao', 'curaçao', 'netherlands'],
+            'curaçao': ['curacao', 'curaçao', 'netherlands'],
+            'bermuda': ['bermuda', 'united kingdom'],
+            'cayman islands': ['cayman islands', 'united kingdom'],
+            'turks and caicos islands': ['turks and caicos islands', 'united kingdom'],
+            'turks and caicos': ['turks and caicos islands', 'united kingdom'],
+            'british virgin islands': ['british virgin islands', 'united kingdom'],
+            'u.s. virgin islands': ['united states virgin islands', 'u.s. virgin islands', 'united states of america'],
             'virgin islands': ['united states virgin islands', 'british virgin islands'],
-            'guadeloupe': ['guadeloupe'],
-            'martinique': ['martinique'],
-            'sint maarten': ['sint maarten'],
-            'st. maarten': ['sint maarten'],
-            'saint martin': ['saint martin', 'sint maarten'],
-            'st. martin': ['saint martin', 'sint maarten'],
+            'guadeloupe': ['guadeloupe', 'france'],
+            'guadeloupe (france)': ['guadeloupe', 'france'],
+            'martinique': ['martinique', 'france'],
+            'martinique (france)': ['martinique', 'france'],
+            'sint maarten': ['sint maarten', 'netherlands'],
+            'st. maarten': ['sint maarten', 'netherlands'],
+            'saint martin': ['saint martin', 'sint maarten', 'france'],
+            'st. martin': ['saint martin', 'sint maarten', 'france'],
+            'netherlands antilles': ['netherlands', 'sint maarten', 'curacao'],
+            'montserrat': ['montserrat', 'united kingdom'],
             // Europe
             'united kingdom': ['united kingdom', 'uk', 'great britain'],
             'uk': ['united kingdom'],
+            'uk overseas territory': ['united kingdom'],
             'england': ['united kingdom'],
             'scotland': ['united kingdom'],
             'wales': ['united kingdom'],
             'northern ireland': ['united kingdom'],
             'ireland': ['ireland'],
             'france': ['france', 'french republic'],
+            'france (mayotte)': ['france', 'mayotte'],
             'germany': ['germany', 'federal republic of germany'],
             'italy': ['italy', 'italian republic'],
             'spain': ['spain', 'kingdom of spain'],
@@ -276,6 +332,7 @@ export default function WorldMap({
             'norway': ['norway'],
             'finland': ['finland'],
             'iceland': ['iceland'],
+            'greenland': ['greenland', 'denmark'],
             'estonia': ['estonia'],
             'latvia': ['latvia'],
             'lithuania': ['lithuania'],
@@ -297,8 +354,8 @@ export default function WorldMap({
             'korea': ['south korea', 'republic of korea'],
             'north korea': ['north korea', 'democratic people\'s republic of korea'],
             'taiwan': ['taiwan'],
-            'hong kong': ['hong kong'],
-            'macau': ['macau', 'macao'],
+            'hong kong': ['hong kong', 'china'],
+            'macau': ['macau', 'macao', 'china'],
             'india': ['india', 'republic of india'],
             'pakistan': ['pakistan'],
             'bangladesh': ['bangladesh', 'people\'s republic of bangladesh'],
@@ -374,6 +431,9 @@ export default function WorldMap({
             'madagascar': ['madagascar'],
             'mauritius': ['mauritius'],
             'seychelles': ['seychelles'],
+            'comoros': ['comoros'],
+            'são tomé & príncipe': ['sao tome and principe', 'são tomé and príncipe'],
+            'sao tome and principe': ['sao tome and principe'],
             // Oceania
             'australia': ['australia', 'commonwealth of australia'],
             'new zealand': ['new zealand'],
@@ -383,12 +443,27 @@ export default function WorldMap({
             'tonga': ['tonga'],
             'vanuatu': ['vanuatu'],
             'solomon islands': ['solomon islands'],
-            'new caledonia': ['new caledonia'],
-            'french polynesia': ['french polynesia'],
-            'guam': ['guam'],
+            'new caledonia': ['new caledonia', 'france'],
+            'new caledonia (france)': ['new caledonia', 'france'],
+            'french polynesia': ['french polynesia', 'france'],
+            'guam': ['guam', 'united states of america'],
             'hawaii': ['united states of america'], // Hawaii is part of USA
-            'tahiti': ['french polynesia'],
-            'bora bora': ['french polynesia'],
+            'tahiti': ['french polynesia', 'france'],
+            'bora bora': ['french polynesia', 'france'],
+            'cook islands': ['cook islands', 'new zealand'],
+            'kiribati': ['kiribati'],
+            'marshall islands': ['marshall islands'],
+            'micronesia': ['micronesia', 'federated states of micronesia'],
+            'nauru': ['nauru'],
+            'palau': ['palau'],
+            'tuvalu': ['tuvalu'],
+            // French territories
+            'réunion (france)': ['france', 'reunion'],
+            'reunion': ['france', 'reunion'],
+            'saint barthélemy (france)': ['france', 'saint barthelemy'],
+            'saint barthelemy': ['france'],
+            // Antarctica
+            'antarctica': ['antarctica'],
           };
 
           // Filter GeoJSON to only include visited countries
@@ -492,7 +567,13 @@ export default function WorldMap({
     <section className="card">
       <h2 className="text-xl font-semibold">World Map</h2>
       <p className="text-muted-foreground text-sm mt-1">
-        Visited countries are shaded in blue with pins marking your specific destinations. Click a pin to view details.
+        Visited countries are shaded in blue. Click a pin to view details.
+        <span className="inline-flex items-center gap-2 ml-2">
+          <span className="inline-block w-3 h-3 rounded-full bg-[#16a34a]"></span>
+          <span className="text-xs">Starting Point</span>
+          <span className="inline-block w-3 h-3 rounded-full bg-[#DC2626]"></span>
+          <span className="text-xs">Destination</span>
+        </span>
       </p>
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[70%_30%] gap-4">
@@ -539,11 +620,15 @@ export default function WorldMap({
 // Client-side cache for geocoding results
 const geocodeCache = new Map<string, [number, number] | null>();
 
-async function getCityCoordinates(
-  city: string,
-  country: string
+async function getCoordinates(
+  address?: string | null,
+  city?: string | null,
+  state?: string | null,
+  country?: string | null
 ): Promise<[number, number] | null> {
-  const cacheKey = `${city.toLowerCase()},${country.toLowerCase()}`;
+  // Build cache key from all parts
+  const parts = [address, city, state, country].filter(Boolean).map(s => s!.toLowerCase());
+  const cacheKey = parts.join(',');
 
   // Check cache first
   if (geocodeCache.has(cacheKey)) {
@@ -551,10 +636,15 @@ async function getCityCoordinates(
   }
 
   try {
+    // Build query params
+    const params = new URLSearchParams();
+    if (address) params.set('address', address);
+    if (city) params.set('city', city);
+    if (state) params.set('state', state);
+    if (country) params.set('country', country);
+
     // Call our API route instead of Nominatim directly (avoids CORS)
-    const response = await fetch(
-      `/api/geocode?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}`
-    );
+    const response = await fetch(`/api/geocode?${params.toString()}`);
 
     if (!response.ok) {
       geocodeCache.set(cacheKey, null);
