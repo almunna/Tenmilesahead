@@ -33,26 +33,36 @@ export default function WorldMap({
     import("leaflet").then((L) => {
       if (!mapContainer.current || map.current) return;
 
+      // Calculate minimum zoom to prevent empty space
+      const containerWidth = mapContainer.current.clientWidth;
+      const containerHeight = mapContainer.current.clientHeight;
+
+      // Calculate min zoom so that world fills the container
+      // World is 360 degrees wide, each tile at zoom 0 is 256px and covers 360 degrees
+      // At zoom N, world width = 256 * 2^N pixels
+      const minZoomX = Math.ceil(Math.log2(containerWidth / 256));
+      const minZoomY = Math.ceil(Math.log2(containerHeight / 256));
+      const calculatedMinZoom = Math.max(minZoomX, minZoomY, 2);
+
       // Create map instance (attributionControl: false removes the attribution)
       map.current = L.default.map(mapContainer.current, {
         attributionControl: false,
         preferCanvas: true,
         fadeAnimation: true,
         zoomAnimation: true,
-        maxBounds: [[-90, -180], [90, 180]], // Restrict to world bounds
-        maxBoundsViscosity: 1.0, // Make bounds rigid (no bouncing outside)
-      }).setView([20, 0], 2);
+        minZoom: calculatedMinZoom,
+        maxBounds: [[-85, -180], [85, 180]], // Slightly less than full extent to avoid edge issues
+        maxBoundsViscosity: 1.0, // Rigid bounds - can't pan outside
+      }).setView([20, 0], calculatedMinZoom);
 
       // Add OpenStreetMap tiles (free!)
       L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
-        minZoom: 2,
+        minZoom: calculatedMinZoom,
         keepBuffer: 4, // Keep extra tiles loaded around the visible area
         updateWhenIdle: false, // Update tiles while panning
         updateWhenZooming: false,
         crossOrigin: true,
-        noWrap: true, // Prevent world from repeating horizontally
-        bounds: [[-90, -180], [90, 180]], // Tile layer bounds
       }).addTo(map.current);
     });
 
@@ -268,7 +278,7 @@ export default function WorldMap({
             'dominica': ['dominica'],
             'saint vincent and the grenadines': ['saint vincent and the grenadines'],
             'saint vincent and grenadines': ['saint vincent and the grenadines'],
-            'anguilla': ['anguilla', 'united kingdom'], // UK territory
+            'anguilla': ['anguilla', 'united kingdom', 'united states of america'], // UK territory (also shade USA per user request)
             'aruba': ['aruba', 'netherlands'],
             'bonaire': ['bonaire', 'caribbean netherlands', 'netherlands'],
             'curacao': ['curacao', 'curaçao', 'netherlands'],
@@ -466,45 +476,52 @@ export default function WorldMap({
             'antarctica': ['antarctica'],
           };
 
+          // Build a set of all countries that should be shaded (including parent/sovereign countries)
+          const countriesToShade = new Set<string>();
+
+          for (const visited of visitedCountries) {
+            // Add the visited country itself
+            countriesToShade.add(visited);
+
+            // Get mapped names (including parent/sovereign countries)
+            const mappedNames = countryNameMap[visited] || [];
+            for (const mappedName of mappedNames) {
+              countriesToShade.add(mappedName.toLowerCase().trim());
+            }
+          }
+
+          console.log('Countries to shade (including parent countries):', Array.from(countriesToShade));
+
           // Filter GeoJSON to only include visited countries
           const visitedFeatures = countriesGeoJSON.features.filter((feature: any) => {
             // Try multiple property names for country name
             const geoCountryName = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN || '';
             const geoCountryLower = geoCountryName.toLowerCase().trim();
 
-            // Check direct match
-            if (visitedCountries.has(geoCountryLower)) {
+            // Check direct match against our expanded set
+            if (countriesToShade.has(geoCountryLower)) {
               console.log('Direct match found:', geoCountryLower);
               return true;
             }
 
             // Check against mapping - both directions
-            for (const visited of visitedCountries) {
-              // Get mapped names for the visited country
-              const mappedNames = countryNameMap[visited] || [visited];
-              for (const mappedName of mappedNames) {
-                const mappedLower = mappedName.toLowerCase().trim();
-                if (geoCountryLower === mappedLower) {
-                  console.log('Mapped match found:', visited, '->', geoCountryLower);
-                  return true;
-                }
-                // Partial matching for longer names
-                if (mappedLower.length > 4 && geoCountryLower.includes(mappedLower)) {
-                  console.log('Partial match found:', visited, 'in', geoCountryLower);
-                  return true;
-                }
-                if (geoCountryLower.length > 4 && mappedLower.includes(geoCountryLower)) {
-                  console.log('Partial match found:', geoCountryLower, 'in', mappedLower);
-                  return true;
-                }
+            for (const toShade of countriesToShade) {
+              // Partial matching for longer names
+              if (toShade.length > 4 && geoCountryLower.includes(toShade)) {
+                console.log('Partial match found:', toShade, 'in', geoCountryLower);
+                return true;
               }
+              if (geoCountryLower.length > 4 && toShade.includes(geoCountryLower)) {
+                console.log('Partial match found:', geoCountryLower, 'in', toShade);
+                return true;
+              }
+            }
 
-              // Also check if the GeoJSON name maps to our visited country
-              for (const [key, values] of Object.entries(countryNameMap)) {
-                if (values.some(v => v.toLowerCase() === geoCountryLower) && visited === key) {
-                  console.log('Reverse map match:', geoCountryLower, '->', key);
-                  return true;
-                }
+            // Also check if the GeoJSON name maps to any country we should shade
+            for (const [key, values] of Object.entries(countryNameMap)) {
+              if (values.some(v => v.toLowerCase() === geoCountryLower) && countriesToShade.has(key)) {
+                console.log('Reverse map match:', geoCountryLower, '->', key);
+                return true;
               }
             }
 
@@ -576,16 +593,16 @@ export default function WorldMap({
         </span>
       </p>
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-[70%_30%] gap-4">
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-[75%_25%] gap-4">
         <div
           ref={mapContainer}
-          className="min-h-[400px] sm:min-h-[500px] md:min-h-[600px] w-full rounded-xl overflow-hidden border border-border"
-          style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', minHeight: '400px' }}
+          className="min-h-[500px] sm:min-h-[600px] md:min-h-[700px] lg:min-h-[750px] w-full rounded-xl overflow-hidden border border-border"
+          style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', minHeight: '500px', backgroundColor: '#aad3df' }}
         />
 
         <div className="rounded-xl border border-border p-3">
           <div className="text-sm font-semibold mb-2">Trip Pins</div>
-          <ul className="max-h-[368px] sm:max-h-[468px] md:max-h-[568px] overflow-auto text-sm space-y-1">
+          <ul className="max-h-[450px] sm:max-h-[550px] md:max-h-[650px] lg:max-h-[700px] overflow-auto text-sm space-y-1">
             {trips.map((t) => (
               <li
                 key={t.id}

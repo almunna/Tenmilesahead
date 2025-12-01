@@ -49,10 +49,26 @@ export async function GET(request: NextRequest) {
     // Rate limit
     await waitForRateLimit();
 
-    // Use Nominatim API with full address for more accurate results
-    const query = encodeURIComponent(queryString);
+    // Build structured query URL for better accuracy
+    // Using structured query parameters instead of free-form q= to avoid ambiguity
+    const structuredParams = new URLSearchParams();
+    structuredParams.set('format', 'json');
+    structuredParams.set('limit', '5'); // Get multiple results to filter
+    structuredParams.set('addressdetails', '1');
+
+    // Use structured query when we have specific components
+    if (city && country) {
+      structuredParams.set('city', city);
+      if (state) structuredParams.set('state', state);
+      structuredParams.set('country', country);
+      if (address) structuredParams.set('street', address);
+    } else {
+      // Fallback to free-form query
+      structuredParams.set('q', queryString);
+    }
+
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1&addressdetails=1`,
+      `https://nominatim.openstreetmap.org/search?${structuredParams.toString()}`,
       {
         headers: {
           'User-Agent': 'TenMilesAhead-TravelApp/1.0',
@@ -69,9 +85,49 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     if (data && data.length > 0) {
+      // If we have a state, try to find a result that matches the state
+      let bestMatch = data[0];
+      if (state && data.length > 1) {
+        const stateLower = state.toLowerCase();
+        // Common US state abbreviations mapping
+        const stateAbbreviations: { [key: string]: string } = {
+          'al': 'alabama', 'ak': 'alaska', 'az': 'arizona', 'ar': 'arkansas',
+          'ca': 'california', 'co': 'colorado', 'ct': 'connecticut', 'de': 'delaware',
+          'fl': 'florida', 'ga': 'georgia', 'hi': 'hawaii', 'id': 'idaho',
+          'il': 'illinois', 'in': 'indiana', 'ia': 'iowa', 'ks': 'kansas',
+          'ky': 'kentucky', 'la': 'louisiana', 'me': 'maine', 'md': 'maryland',
+          'ma': 'massachusetts', 'mi': 'michigan', 'mn': 'minnesota', 'ms': 'mississippi',
+          'mo': 'missouri', 'mt': 'montana', 'ne': 'nebraska', 'nv': 'nevada',
+          'nh': 'new hampshire', 'nj': 'new jersey', 'nm': 'new mexico', 'ny': 'new york',
+          'nc': 'north carolina', 'nd': 'north dakota', 'oh': 'ohio', 'ok': 'oklahoma',
+          'or': 'oregon', 'pa': 'pennsylvania', 'ri': 'rhode island', 'sc': 'south carolina',
+          'sd': 'south dakota', 'tn': 'tennessee', 'tx': 'texas', 'ut': 'utah',
+          'vt': 'vermont', 'va': 'virginia', 'wa': 'washington', 'wv': 'west virginia',
+          'wi': 'wisconsin', 'wy': 'wyoming', 'dc': 'district of columbia'
+        };
+
+        // Expand abbreviation if needed
+        const stateExpanded = stateAbbreviations[stateLower] || stateLower;
+
+        for (const result of data) {
+          const addressDetails = result.address || {};
+          const resultState = (addressDetails.state || '').toLowerCase();
+          const resultStateCode = (addressDetails['ISO3166-2-lvl4'] || '').toLowerCase().replace('us-', '');
+
+          // Check if the result matches our expected state
+          if (resultState.includes(stateExpanded) ||
+              stateExpanded.includes(resultState) ||
+              resultStateCode === stateLower ||
+              stateAbbreviations[resultStateCode] === stateExpanded) {
+            bestMatch = result;
+            break;
+          }
+        }
+      }
+
       const coords: [number, number] = [
-        parseFloat(data[0].lon),
-        parseFloat(data[0].lat),
+        parseFloat(bestMatch.lon),
+        parseFloat(bestMatch.lat),
       ];
       geocodeCache.set(cacheKey, coords);
       return NextResponse.json({ coordinates: coords });

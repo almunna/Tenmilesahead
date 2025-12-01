@@ -7,6 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import Flipbook from "@/components/Flipbook";
 import EditTripModal from "@/components/EditTripModal";
 import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
+import ConfirmModal from "@/components/modals/ConfirmModal";
 
 import {
   addDoc,
@@ -446,6 +447,7 @@ function TripTile({
   const [accommodationsOpen, setAccommodationsOpen] = useState(false);
   const [restaurantsOpen, setRestaurantsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Cover
   useEffect(() => {
@@ -470,8 +472,8 @@ function TripTile({
   }, [trip.id, trip.coverMediaId]);
 
   async function deleteTrip() {
-    if (!confirm("Delete this entire trip? This cannot be undone.")) return;
     await deleteDoc(doc(db, "trips", trip.id));
+    setDeleteConfirmOpen(false);
   }
 
   return (
@@ -508,7 +510,10 @@ function TripTile({
               <button
                 type="button"
                 className="block w-full text-left px-3 py-2 hover:bg-haiti-800/5 text-red-600"
-                onClick={deleteTrip}
+                onClick={() => {
+                  setDeleteConfirmOpen(true);
+                  setMenuOpen(false);
+                }}
               >
                 Delete trip
               </button>
@@ -656,6 +661,17 @@ function TripTile({
       {shareOpen && (
         <ShareTripModal tripId={trip.id} onClose={() => setShareOpen(false)} />
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        title="Delete Trip"
+        message={`Are you sure you want to delete "${trip.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={deleteTrip}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </>
   );
 }

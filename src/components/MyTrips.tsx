@@ -19,6 +19,7 @@ import PhotosModal from "@/components/modals/PhotosModal";
 import ItineraryModal from "@/components/modals/ItineraryModal";
 import PlaceModal from "@/components/modals/PlaceModal";
 import ShareTripModal from "@/components/modals/ShareTripModal";
+import ConfirmModal from "@/components/modals/ConfirmModal";
 
 type WithId<T> = T & { id: string };
 
@@ -140,6 +141,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
   const [accommodationsOpen, setAccommodationsOpen] = useState(false);
   const [restaurantsOpen, setRestaurantsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // --- Cover focus (drag to reposition) ---
   const [coverFocus, setCoverFocus] = useState<{ x: number; y: number }>(() => {
@@ -325,8 +327,8 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
   }
 
   async function deleteTrip() {
-    if (!confirm("Delete this entire trip? This cannot be undone.")) return;
     await deleteDoc(doc(db, "trips", trip.id));
+    setDeleteConfirmOpen(false);
   }
 
   return (
@@ -676,7 +678,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
               aria-label="Delete"
               onClick={(e) => {
                 e.stopPropagation();
-                deleteTrip();
+                setDeleteConfirmOpen(true);
               }}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -791,6 +793,17 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
       {shareOpen && (
         <ShareTripModal tripId={trip.id} onClose={() => setShareOpen(false)} />
       )}
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        title="Delete Trip"
+        message={`Are you sure you want to delete "${trip.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={deleteTrip}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </>
   );
 }

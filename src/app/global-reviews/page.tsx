@@ -9,6 +9,7 @@ import type { Review, ReviewType, MediaItem } from "@/lib/types";
 import { getCruiseLineNames } from "@/lib/cruiseData";
 import Protected from "@/components/Protected";
 import SubscriptionRequiredModal from "@/components/SubscriptionRequiredModal";
+import ConfirmModal from "@/components/modals/ConfirmModal";
 import { useAuth } from "@/components/AuthProvider";
 
 type ReviewWithMedia = Review & {
@@ -110,6 +111,10 @@ function GlobalReviewsInner() {
 
   // Edit modal state
   const [editingReview, setEditingReview] = useState<ReviewWithMedia | null>(null);
+
+  // Delete confirmation modal state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [reviewToDelete, setReviewToDelete] = useState<ReviewWithMedia | null>(null);
 
   // Add review modal state
   const [addingReviewForPlace, setAddingReviewForPlace] = useState<{ placeName: string; city: string; country: string; type: ReviewType } | null>(null);
@@ -370,8 +375,13 @@ function GlobalReviewsInner() {
 
   const hasMore = visibleCount < allFilteredReviewCards.length;
 
-  const handleDeleteReview = async (review: ReviewWithMedia) => {
-    if (!confirm(`Delete your review for "${review.placeName}"?`)) return;
+  const handleDeleteReview = (review: ReviewWithMedia) => {
+    setReviewToDelete(review);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteReview = async () => {
+    if (!reviewToDelete) return;
 
     try {
       // Determine subcollection name based on review type
@@ -383,13 +393,16 @@ function GlobalReviewsInner() {
         "Cruises": "cruises",
       };
 
-      const subcollection = subcollectionMap[review.type];
-      await deleteDoc(doc(db, "trips", review.tripId, subcollection, review.id!));
+      const subcollection = subcollectionMap[reviewToDelete.type];
+      await deleteDoc(doc(db, "trips", reviewToDelete.tripId, subcollection, reviewToDelete.id!));
 
+      setDeleteConfirmOpen(false);
+      setReviewToDelete(null);
       loadReviews(); // Reload reviews
     } catch (error) {
       console.error("Error deleting review:", error);
-      alert("Failed to delete review. Please try again.");
+      setDeleteConfirmOpen(false);
+      setReviewToDelete(null);
     }
   };
 
@@ -739,6 +752,21 @@ function GlobalReviewsInner() {
           }}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        title="Delete Review"
+        message={reviewToDelete ? `Are you sure you want to delete your review for "${reviewToDelete.placeName}"?` : ""}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={confirmDeleteReview}
+        onCancel={() => {
+          setDeleteConfirmOpen(false);
+          setReviewToDelete(null);
+        }}
+      />
     </div>
   );
 }

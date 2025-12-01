@@ -33,6 +33,7 @@ import PhotosModal from "@/components/modals/PhotosModal";
 import ItineraryModal from "@/components/modals/ItineraryModal";
 import PlaceModal from "@/components/modals/PlaceModal";
 import ShareTripModal from "@/components/modals/ShareTripModal";
+import ConfirmModal from "@/components/modals/ConfirmModal";
 
 /** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
 const isOtherish = (s: string) => {
@@ -1073,6 +1074,7 @@ function TripCard({
   const [cover, setCover] = useState<MediaItem | null>(null);
   const [allMedia, setAllMedia] = useState<MediaItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // --- Cover focus (drag to reposition) ---
   const [coverFocus, setCoverFocus] = useState<{ x: number; y: number }>(() => {
@@ -1473,7 +1475,7 @@ function TripCard({
             className="h-9 w-9 rounded-lg bg-red-600 hover:bg-red-700 flex items-center justify-center text-white transition-colors"
             aria-label="Delete"
             title="Delete"
-            onClick={() => deleteTrip(trip.id!)}
+            onClick={() => setDeleteConfirmOpen(true)}
           >
             <svg
               className="w-5 h-5"
@@ -1633,6 +1635,20 @@ function TripCard({
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={deleteConfirmOpen}
+        title="Delete Trip"
+        message={`Are you sure you want to delete "${trip.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={() => {
+          deleteTrip(trip.id!);
+          setDeleteConfirmOpen(false);
+        }}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   );
 }
