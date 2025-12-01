@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Lazy initialization to avoid build-time errors
+let stripeInstance: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  }
+  return stripeInstance;
+}
 
 // Price configuration
 const PRICE_CONFIG = {
@@ -21,6 +28,7 @@ const PRICE_CONFIG = {
 const PRODUCT_NAME = 'Ten Miles Ahead Pro';
 
 async function getOrCreateProduct(): Promise<Stripe.Product> {
+  const stripe = getStripe();
   const products = await stripe.products.list({ limit: 100 });
   const existingProduct = products.data.find(p => p.name === PRODUCT_NAME && p.active);
 
@@ -35,6 +43,7 @@ async function getOrCreateProduct(): Promise<Stripe.Product> {
 }
 
 async function getOrCreatePrice(productId: string, planId: 'monthly' | 'annual'): Promise<Stripe.Price> {
+  const stripe = getStripe();
   const config = PRICE_CONFIG[planId];
 
   const prices = await stripe.prices.list({
@@ -62,6 +71,7 @@ async function getOrCreatePrice(productId: string, planId: 'monthly' | 'annual')
 }
 
 async function cancelIncompleteSubscriptions(customerId: string): Promise<void> {
+  const stripe = getStripe();
   const subscriptions = await stripe.subscriptions.list({
     customer: customerId,
     status: 'incomplete',
@@ -80,6 +90,7 @@ async function cancelIncompleteSubscriptions(customerId: string): Promise<void> 
 
 export async function POST(request: NextRequest) {
   try {
+    const stripe = getStripe();
     const body = await request.json();
     const { planId, userId, userEmail } = body;
 

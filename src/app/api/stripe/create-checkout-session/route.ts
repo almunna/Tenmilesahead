@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Lazy initialization to avoid build-time errors
+let stripeInstance: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  }
+  return stripeInstance;
+}
 
 // Price IDs for each plan - you'll need to create these in Stripe Dashboard
 // For now, using dynamic pricing. Replace with actual Price IDs from Stripe.
@@ -28,6 +35,7 @@ const PRICE_CONFIG = {
 
 export async function POST(request: NextRequest) {
   try {
+    const stripe = getStripe();
     const body = await request.json();
     const { priceId, userId, userEmail } = body;
 

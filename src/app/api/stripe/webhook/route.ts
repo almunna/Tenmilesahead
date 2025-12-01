@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import * as admin from 'firebase-admin';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Lazy initialization to avoid build-time errors
+let stripeInstance: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  }
+  return stripeInstance;
+}
 
 // Initialize Firebase Admin if not already initialized
 function getFirebaseAdmin() {
@@ -41,6 +48,7 @@ async function updateUserSubscription(
 
 // Helper to extract subscription data from response
 async function getSubscriptionData(subscriptionId: string) {
+  const stripe = getStripe();
   const response = await stripe.subscriptions.retrieve(subscriptionId);
   // Cast to any to access properties that may differ between SDK versions
   const sub = response as any;
@@ -54,6 +62,7 @@ async function getSubscriptionData(subscriptionId: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const stripe = getStripe();
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
 
