@@ -164,13 +164,16 @@ export async function POST(request: NextRequest) {
     // Check if there's a payment intent on the invoice
     let clientSecret: string | null = null;
 
-    if (invoice.payment_intent) {
-      if (typeof invoice.payment_intent === 'string') {
+    // Cast invoice to access payment_intent (may not be in type definition but exists at runtime)
+    const invoicePaymentIntent = (invoice as unknown as { payment_intent?: string | { client_secret: string | null } }).payment_intent;
+
+    if (invoicePaymentIntent) {
+      if (typeof invoicePaymentIntent === 'string') {
         // Fetch the payment intent
-        const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent);
+        const pi = await stripe.paymentIntents.retrieve(invoicePaymentIntent);
         clientSecret = pi.client_secret;
       } else {
-        clientSecret = invoice.payment_intent.client_secret;
+        clientSecret = invoicePaymentIntent.client_secret;
       }
     }
 
