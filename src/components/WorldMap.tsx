@@ -517,9 +517,9 @@ export default function WorldMap({
           visitedFeatures.forEach((feature: any) => {
             const layer = L.default.geoJSON(feature, {
               style: {
-                fillColor: '#66bfcc',
+                fillColor: '#ec4899',
                 fillOpacity: 0.35,
-                color: '#66bfcc',
+                color: '#ec4899',
                 weight: 2,
                 opacity: 0.7,
               },
@@ -567,7 +567,7 @@ export default function WorldMap({
     <section className="card">
       <h2 className="text-xl font-semibold">World Map</h2>
       <p className="text-muted-foreground text-sm mt-1">
-        Visited countries are shaded in blue. Click a pin to view details.
+        Visited countries are shaded in pink. Click a pin to view details.
         <span className="inline-flex items-center gap-2 ml-2">
           <span className="inline-block w-3 h-3 rounded-full bg-[#16a34a]"></span>
           <span className="text-xs">Starting Point</span>

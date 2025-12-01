@@ -11,8 +11,16 @@ import {
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+// Initialize Stripe - use lazy loading to handle missing env var gracefully
+const getStripePromise = () => {
+  const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  if (!key) {
+    console.error('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set');
+    return null;
+  }
+  return loadStripe(key);
+};
+const stripePromise = getStripePromise();
 
 type PlanId = "monthly" | "annual";
 
@@ -280,6 +288,19 @@ export default function StripePaymentForm({
 
   if (!clientSecret) {
     return null;
+  }
+
+  if (!stripePromise) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-red-500 mb-4">
+          Payment system is not configured. Please contact support.
+        </div>
+        <button onClick={onCancel} className="btn">
+          Go Back
+        </button>
+      </div>
+    );
   }
 
   return (
