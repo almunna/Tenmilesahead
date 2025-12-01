@@ -1,5 +1,5 @@
 "use client";
-import { collection, onSnapshot, orderBy, query, doc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { MediaItem, Trip } from "@/lib/types";
@@ -27,11 +27,17 @@ function fmtMDY(s: string | undefined | null) {
 function ZoomableImage({
   src,
   alt,
-  onClose
+  onClose,
+  tripInfo
 }: {
   src: string;
   alt: string;
   onClose: () => void;
+  tripInfo?: {
+    name: string;
+    location: string;
+    dateRange: string;
+  };
 }) {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -178,6 +184,27 @@ function ZoomableImage({
         />
       </div>
 
+      {/* Trip info overlay for cover photo */}
+      {tripInfo && (
+        <div className="absolute bottom-16 left-0 right-0 flex justify-center pointer-events-none">
+          <div className="bg-black/70 backdrop-blur-sm rounded-lg px-6 py-4 text-white max-w-md">
+            <h2 className="text-xl font-bold mb-2">{tripInfo.name}</h2>
+            <div className="flex items-center gap-2 mb-1 text-white/90">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm">{tripInfo.location}</span>
+            </div>
+            <div className="flex items-center gap-2 text-white/80">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm">{tripInfo.dateRange}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Helper text */}
       <div className="text-center py-2 text-white/50 text-xs">
         {scale > 1 ? "Drag to pan • Scroll to zoom • Click outside or ESC to close" : "Click image to zoom • Scroll to zoom • ESC to close"}
@@ -200,7 +227,7 @@ export default function Flipbook({
   const [currentPage, setCurrentPage] = useState(0);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<"next" | "prev" | null>(null);
-  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string; tripInfo?: { name: string; location: string; dateRange: string } } | null>(null);
 
   // Swipe state
   const dragging = useRef(false);
@@ -208,10 +235,8 @@ export default function Flipbook({
   const deltaX = useRef(0);
   const SWIPE_THRESHOLD = 60;
 
-  // Cover repositioning state
+  // Cover position from trip document (read-only in flipbook)
   const [coverPosY, setCoverPosY] = useState<number>(50);
-  const coverDragging = useRef(false);
-  const coverContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch trip data
   useEffect(() => {
@@ -283,13 +308,16 @@ export default function Flipbook({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, prev, next, onClose, zoomedImage]);
 
-  // Pointer handlers for swipe
+  // Pointer handlers for swipe - don't capture pointer to allow clicks on images
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (zoomedImage) return;
+    // Only start drag tracking on the container itself, not on child elements
+    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('.cursor-zoom-in')) {
+      return; // Don't track swipe when clicking on zoomable images
+    }
     dragging.current = true;
     startX.current = e.clientX;
     deltaX.current = 0;
-    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -300,7 +328,6 @@ export default function Flipbook({
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current || zoomedImage) return;
     dragging.current = false;
-    e.currentTarget.releasePointerCapture(e.pointerId);
 
     const dx = deltaX.current;
     if (dx <= -SWIPE_THRESHOLD && items.length > 0) {
@@ -311,36 +338,9 @@ export default function Flipbook({
     deltaX.current = 0;
   };
 
-  // Cover repositioning handlers
-  const onCoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    coverDragging.current = true;
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-  };
-
-  const onCoverPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!coverDragging.current || !coverContainerRef.current) return;
-    const box = coverContainerRef.current.getBoundingClientRect();
-    const y = e.clientY - box.top;
-    const pct = Math.max(0, Math.min(100, (y / box.height) * 100));
-    setCoverPosY(pct);
-  };
-
-  const onCoverPointerUp = async (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!coverDragging.current) return;
-    coverDragging.current = false;
-    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
-    if (trip?.id) {
-      await updateDoc(doc(db, "trips", trip.id), {
-        coverPositionY: coverPosY,
-        updatedAt: Date.now(),
-      } as any);
-    }
-  };
-
   // Open image in zoom viewer
-  const openZoomedImage = (src: string, alt: string) => {
-    setZoomedImage({ src, alt });
+  const openZoomedImage = (src: string, alt: string, tripInfo?: { name: string; location: string; dateRange: string }) => {
+    setZoomedImage({ src, alt, tripInfo });
   };
 
   if (!open) return null;
@@ -365,6 +365,7 @@ export default function Flipbook({
           src={zoomedImage.src}
           alt={zoomedImage.alt}
           onClose={() => setZoomedImage(null)}
+          tripInfo={zoomedImage.tripInfo}
         />
       )}
 
@@ -412,18 +413,14 @@ export default function Flipbook({
       {/* Main Book Container */}
       <div
         className="flex-1 flex items-center justify-center relative px-4 py-6"
-        style={{ touchAction: "pan-y", perspective: "2000px" }}
+        style={{ touchAction: "pan-y" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
         {/* Book */}
         <div
-          className="relative w-full max-w-4xl"
-          style={{
-            transformStyle: "preserve-3d",
-            transform: "rotateX(5deg)"
-          }}
+          className="relative w-full max-w-6xl xl:max-w-7xl max-h-[calc(100vh-220px)]"
         >
           {/* Book Shadow */}
           <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-[90%] h-16 bg-black/40 blur-2xl rounded-[50%]" />
@@ -439,10 +436,10 @@ export default function Flipbook({
           />
 
           {/* Pages Container */}
-          <div className="relative flex" style={{ transformStyle: "preserve-3d" }}>
+          <div className="relative flex">
             {/* Left Page */}
             <div
-              className={`relative w-1/2 aspect-[3/4] bg-gradient-to-l from-[#f8f5f0] to-[#f0ebe5] rounded-l-lg overflow-hidden shadow-xl
+              className={`relative w-1/2 h-[min(calc(100vh-220px),75vw*0.75)] bg-gradient-to-l from-[#f8f5f0] to-[#f0ebe5] rounded-l-lg overflow-hidden shadow-xl
                 ${isFlipping && flipDirection === "prev" ? "animate-flip-reverse" : ""}
               `}
               style={{
@@ -539,7 +536,7 @@ export default function Flipbook({
 
             {/* Right Page */}
             <div
-              className={`relative w-1/2 aspect-[3/4] bg-gradient-to-r from-[#f8f5f0] to-[#fdfcfa] rounded-r-lg overflow-hidden shadow-xl
+              className={`relative w-1/2 h-[min(calc(100vh-220px),75vw*0.75)] bg-gradient-to-r from-[#f8f5f0] to-[#fdfcfa] rounded-r-lg overflow-hidden shadow-xl
                 ${isFlipping && flipDirection === "next" ? "animate-flip" : ""}
               `}
               style={{
@@ -559,67 +556,79 @@ export default function Flipbook({
 
               {isCoverPage ? (
                 /* Cover Right Side - Main Image */
-                <div
-                  ref={coverContainerRef}
-                  className="w-full h-full relative"
-                  style={{ cursor: coverMedia ? "grab" : "default" }}
-                  onPointerDown={coverMedia ? onCoverPointerDown : undefined}
-                  onPointerMove={coverMedia ? onCoverPointerMove : undefined}
-                  onPointerUp={coverMedia ? onCoverPointerUp : undefined}
-                >
-                  {coverMedia ? (
-                    coverMedia.type === "image" ? (
-                      <img
-                        src={coverMedia.downloadURL}
-                        alt={trip?.name || "Cover"}
-                        className="w-full h-full object-cover select-none"
-                        style={{ objectPosition: `50% ${coverPosY}%` }}
-                        draggable={false}
-                      />
+                <div className="w-full h-full flex flex-col justify-center p-4">
+                  {/* Cover image container - matches trip detail page aspect ratio (landscape ~16:9) */}
+                  <div
+                    className={`relative w-full aspect-video rounded-lg overflow-hidden shadow-lg ${coverMedia?.type === "image" ? "cursor-zoom-in group" : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (coverMedia?.type === "image") {
+                        openZoomedImage(coverMedia.downloadURL, trip?.name || "Cover", {
+                          name: trip?.name || "Trip",
+                          location: locationStr,
+                          dateRange: dateRange
+                        });
+                      }
+                    }}
+                  >
+                    {coverMedia ? (
+                      coverMedia.type === "image" ? (
+                        <>
+                          <img
+                            src={coverMedia.downloadURL}
+                            alt={trip?.name || "Cover"}
+                            className="absolute inset-0 w-full h-full object-cover select-none"
+                            style={{ objectPosition: `50% ${coverPosY}%` }}
+                            draggable={false}
+                          />
+                          {/* Zoom hover overlay */}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-3">
+                              <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                              </svg>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <video
+                          src={coverMedia.downloadURL}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      )
                     ) : (
-                      <video
-                        src={coverMedia.downloadURL}
-                        className="w-full h-full object-cover"
-                        muted
-                        playsInline
-                      />
-                    )
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                      <div className="text-center p-8">
-                        <svg className="w-16 h-16 text-primary/40 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                        <div className="text-center p-8">
+                          <svg className="w-16 h-16 text-primary/40 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                          </svg>
+                          <p className="text-slate-500 text-sm">No cover photo set</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Gradient overlay for text */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+
+                    {/* Trip info overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4 text-white pointer-events-none">
+                      <h1 className="text-xl sm:text-2xl font-bold mb-2 drop-shadow-lg">{trip?.name || "Trip"}</h1>
+                      <div className="flex items-center gap-2 mb-1 text-white/90">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                         </svg>
-                        <p className="text-slate-500 text-sm">No cover photo set</p>
+                        <span className="text-xs">{locationStr}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-white/80">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs">{dateRange}</span>
                       </div>
                     </div>
-                  )}
-
-                  {/* Gradient overlay for text */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
-
-                  {/* Trip info overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white pointer-events-none">
-                    <h1 className="text-2xl sm:text-3xl font-bold mb-3 drop-shadow-lg">{trip?.name || "Trip"}</h1>
-                    <div className="flex items-center gap-2 mb-2 text-white/90">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm">{locationStr}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm">{dateRange}</span>
-                    </div>
                   </div>
-
-                  {coverMedia && (
-                    <div className="absolute top-3 right-3 text-[10px] px-2 py-1 rounded-full bg-black/40 text-white/70 backdrop-blur-sm">
-                      Drag to reposition
-                    </div>
-                  )}
                 </div>
               ) : currentMedia ? (
                 /* Current Photo */

@@ -545,8 +545,9 @@ export default function PlaceModal({
                 </div>
               )}
 
-              {/* Extra fields - combined in one row */}
-              {(extraLeft.length > 0 || extraRight.length > 0) && (
+              {/* Extra fields - combined in one row (hidden when onShip for restaurants, activities, accommodations) */}
+              {(extraLeft.length > 0 || extraRight.length > 0) &&
+               !(form.onShip && (subcollection === "restaurants" || subcollection === "activities" || subcollection === "accommodations")) && (
                 <div className="grid md:grid-cols-2 gap-3">
                   {extraLeft.map((ex) => (
                     <div key={ex.key}>

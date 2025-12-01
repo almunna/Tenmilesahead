@@ -87,7 +87,7 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
       </div>
 
       {!collapsedTrips && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredTrips.map((t) => (
             <TripTile key={t.id} trip={t} />
           ))}

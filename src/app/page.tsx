@@ -550,8 +550,8 @@ function UpcomingTripCountdown({ trips }: { trips: WithId<Trip>[] }) {
 
   return (
     <div className="mt-4 pt-4 border-t border-white/20 space-y-4">
-      <p className="text-sm text-white/80 font-medium">
-        Upcoming {upcomingTrips.length === 1 ? "Trip" : "Trips"}
+      <p className="text-lg text-white/80 font-semibold">
+        Upcoming Trips
       </p>
       {upcomingTrips.map((trip) => {
         const countdown = getCountdown(trip.startDate!);
@@ -868,7 +868,7 @@ function HomeInner() {
         {/* Display name with edit button - shows when username is set and not editing */}
         {username && !isEditingUsername && (
           <section className="rounded-2xl bg-primary p-6 text-white shadow-lg">
-            <p className="text-3xl font-bold">{username}</p>
+            <p className="text-3xl font-bold">Welcome {username}!</p>
             {/* Upcoming Trip Countdown */}
             <UpcomingTripCountdown trips={trips} />
           </section>

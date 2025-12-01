@@ -223,8 +223,8 @@ export default function WorldMap({
       // Highlight visited countries
       if (visitedCountries.size > 0 && map.current) {
         try {
-          // Fetch country boundaries GeoJSON (using smaller, simplified version)
-          const response = await fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json');
+          // Fetch country boundaries GeoJSON (using Natural Earth 10m for most detailed island boundaries)
+          const response = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson');
 
           if (!response.ok) {
             console.error('Failed to fetch GeoJSON:', response.status);
@@ -265,7 +265,9 @@ export default function WorldMap({
             'haiti': ['haiti'],
             'jamaica': ['jamaica'],
             'puerto rico': ['puerto rico', 'united states of america'],
-            'bahamas': ['the bahamas', 'bahamas'],
+            'bahamas': ['the bahamas', 'bahamas', 'commonwealth of the bahamas'],
+            'the bahamas': ['the bahamas', 'bahamas', 'commonwealth of the bahamas'],
+            'new providence': ['the bahamas', 'bahamas'], // Nassau is on New Providence island
             'barbados': ['barbados'],
             'trinidad and tobago': ['trinidad and tobago'],
             'antigua and barbuda': ['antigua and barbuda'],
@@ -494,13 +496,23 @@ export default function WorldMap({
 
           // Filter GeoJSON to only include visited countries
           const visitedFeatures = countriesGeoJSON.features.filter((feature: any) => {
-            // Try multiple property names for country name
-            const geoCountryName = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN || '';
+            // Try multiple property names for country name (Natural Earth uses ADMIN, NAME, NAME_LONG, SOVEREIGNT)
+            const props = feature.properties;
+            const geoCountryName = props.ADMIN || props.NAME || props.name || props.NAME_LONG || '';
             const geoCountryLower = geoCountryName.toLowerCase().trim();
+
+            // Also check sovereign nation for territories
+            const sovereignName = (props.SOVEREIGNT || props.SOV_A3 || '').toLowerCase().trim();
 
             // Check direct match against our expanded set
             if (countriesToShade.has(geoCountryLower)) {
               console.log('Direct match found:', geoCountryLower);
+              return true;
+            }
+
+            // Check sovereign name (for territories)
+            if (sovereignName && countriesToShade.has(sovereignName)) {
+              console.log('Sovereign match found:', geoCountryLower, '-> sovereign:', sovereignName);
               return true;
             }
 
