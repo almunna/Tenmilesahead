@@ -301,29 +301,26 @@ export default function Flipbook({
                 </div>
               ) : currentMediaIndex > 0 ? (
                 /* Previous Photo */
-                <div className="w-full h-full p-4">
-                  <div className="w-full h-full rounded-lg overflow-hidden bg-slate-200 relative">
+                <div className="w-full h-full p-4 flex flex-col">
+                  <div className="flex-1 flex items-center justify-center rounded-lg overflow-hidden bg-slate-100 relative min-h-0">
                     {items[currentMediaIndex - 1]?.type === "image" ? (
                       <img
                         src={items[currentMediaIndex - 1].downloadURL}
                         alt={items[currentMediaIndex - 1].caption || ""}
-                        className="w-full h-full object-cover"
+                        className="max-w-full max-h-full object-contain"
                         draggable={false}
                       />
                     ) : items[currentMediaIndex - 1] ? (
                       <video
                         src={items[currentMediaIndex - 1].downloadURL}
-                        className="w-full h-full object-cover"
+                        className="max-w-full max-h-full object-contain"
                         muted
                         playsInline
                       />
                     ) : null}
-                    {/* Photo corner effects */}
-                    <div className="absolute top-2 left-2 w-8 h-8 border-l-2 border-t-2 border-white/40" />
-                    <div className="absolute bottom-2 right-2 w-8 h-8 border-r-2 border-b-2 border-white/40" />
                   </div>
                   {items[currentMediaIndex - 1]?.caption && (
-                    <p className="mt-2 text-xs text-slate-500 text-center italic line-clamp-2">
+                    <p className="mt-2 text-xs text-slate-500 text-center italic line-clamp-2 flex-shrink-0">
                       {items[currentMediaIndex - 1].caption}
                     </p>
                   )}
@@ -430,28 +427,25 @@ export default function Flipbook({
                 </div>
               ) : currentMedia ? (
                 /* Current Photo */
-                <div className="w-full h-full p-4">
-                  <div className="w-full h-full rounded-lg overflow-hidden bg-slate-200 relative shadow-lg">
+                <div className="w-full h-full p-4 flex flex-col">
+                  <div className="flex-1 flex items-center justify-center rounded-lg overflow-hidden bg-slate-100 relative shadow-lg min-h-0">
                     {currentMedia.type === "image" ? (
                       <img
                         src={currentMedia.downloadURL}
                         alt={currentMedia.caption || ""}
-                        className="w-full h-full object-cover"
+                        className="max-w-full max-h-full object-contain"
                         draggable={false}
                       />
                     ) : (
                       <video
                         src={currentMedia.downloadURL}
-                        className="w-full h-full object-cover"
+                        className="max-w-full max-h-full object-contain"
                         controls
                       />
                     )}
-                    {/* Photo corner effects */}
-                    <div className="absolute top-2 left-2 w-8 h-8 border-l-2 border-t-2 border-white/40" />
-                    <div className="absolute bottom-2 right-2 w-8 h-8 border-r-2 border-b-2 border-white/40" />
                   </div>
                   {currentMedia.caption && (
-                    <p className="mt-2 text-xs text-slate-500 text-center italic line-clamp-2">
+                    <p className="mt-2 text-xs text-slate-500 text-center italic line-clamp-2 flex-shrink-0">
                       {currentMedia.caption}
                     </p>
                   )}
