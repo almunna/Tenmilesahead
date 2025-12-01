@@ -69,7 +69,7 @@ export default function AddTripModal({
     originState: "",
     originCountry: "",
     originAddress: "",
-    transportationType: "",
+    originTransportationType: "",
     cruiseLine: "",
     cruiseShip: "",
     customCruiseLine: "",
@@ -79,8 +79,8 @@ export default function AddTripModal({
     description: "",
   });
 
-  // Check if cruise info is complete when Cruise is selected
-  const isCruise = f.transportationType === "Cruise";
+  // Check if cruise info is complete when Cruise is selected (via origin transportation)
+  const isCruise = f.originTransportationType === "Cruise";
   const cruiseLineValue = f.cruiseLine === OTHER_CRUISE_LINE ? f.customCruiseLine : f.cruiseLine;
   const cruiseShipValue = f.cruiseShip === "Other" ? f.customCruiseShip : f.cruiseShip;
   const isCruiseComplete = !isCruise || (!!cruiseLineValue && !!cruiseShipValue);
@@ -99,7 +99,6 @@ export default function AddTripModal({
     !!f.name &&
     !!f.city &&
     !!f.country &&
-    !!f.transportationType &&
     isCruiseComplete &&
     !!f.startDate &&
     !!f.endDate;
@@ -292,7 +291,7 @@ export default function AddTripModal({
         originState: f.originState || null,
         originCountry: f.originCountry || null,
         originAddress: f.originAddress || null,
-        transportationType: f.transportationType || null,
+        originTransportationType: f.originTransportationType || null,
         cruiseLine: isCruise ? cruiseLineValue || null : null,
         cruiseShip: isCruise ? cruiseShipValue || null : null,
         specificAddress: null,
@@ -448,6 +447,27 @@ export default function AddTripModal({
               />
             </div>
 
+            {/* Dates */}
+            <div>
+              <label className="label">Start Date *</label>
+              <input
+                className="input"
+                type="date"
+                value={f.startDate}
+                onChange={(e) => setF({ ...f, startDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label">End Date *</label>
+              <input
+                className="input"
+                type="date"
+                value={f.endDate}
+                onChange={(e) => setF({ ...f, endDate: e.target.value })}
+              />
+            </div>
+            <div></div>{/* Empty div for grid alignment */}
+
             {/* Origin Section Header */}
             <div className="md:col-span-3">
               <h4 className="text-lg font-semibold text-foreground mt-2 mb-1">Starting From</h4>
@@ -531,6 +551,23 @@ export default function AddTripModal({
               />
             </div>
 
+            {/* Origin Mode of Transportation */}
+            <div className="md:col-span-3">
+              <label className="label">Mode of Transportation</label>
+              <select
+                className="input"
+                value={f.originTransportationType}
+                onChange={(e) => setF({ ...f, originTransportationType: e.target.value })}
+              >
+                <option value="">Select transportation</option>
+                {TRANSPORT_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Destination Section Header */}
             <div className="md:col-span-3">
               <h4 className="text-lg font-semibold text-foreground mt-3 mb-1">Destination</h4>
@@ -601,39 +638,7 @@ export default function AddTripModal({
               />
             </div>
 
-            {/* Transportation */}
-            <div className="md:col-span-3">
-              <label className="label">Mode of Transportation *</label>
-              <select
-                className="input"
-                value={f.transportationType}
-                onChange={(e) => {
-                  const newTransport = e.target.value;
-                  // Reset cruise fields when changing transportation type
-                  if (newTransport !== "Cruise") {
-                    setF({
-                      ...f,
-                      transportationType: newTransport,
-                      cruiseLine: "",
-                      cruiseShip: "",
-                      customCruiseLine: "",
-                      customCruiseShip: "",
-                    });
-                  } else {
-                    setF({ ...f, transportationType: newTransport });
-                  }
-                }}
-              >
-                <option value="">Select transportation</option>
-                {TRANSPORT_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Cruise Line Selection (only shown when Cruise is selected) */}
+            {/* Cruise Line Selection (only shown when Cruise is selected via origin transportation) */}
             {isCruise && (
               <>
                 <div className="md:col-span-3">
@@ -845,26 +850,6 @@ export default function AddTripModal({
                 </div>
               </>
             )}
-
-            {/* Dates */}
-            <div>
-              <label className="label">Start Date *</label>
-              <input
-                className="input"
-                type="date"
-                value={f.startDate}
-                onChange={(e) => setF({ ...f, startDate: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">End Date *</label>
-              <input
-                className="input"
-                type="date"
-                value={f.endDate}
-                onChange={(e) => setF({ ...f, endDate: e.target.value })}
-              />
-            </div>
 
             {/* Description */}
             <div className="md:col-span-3">

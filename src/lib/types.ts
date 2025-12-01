@@ -15,11 +15,12 @@ export type Trip = {
   originState?: string | null;
   originCountry?: string | null;
   originAddress?: string | null;
+  originTransportationType?: string | null; // Mode of transportation from origin
 
   // Logistics
-  transportationType: string; // *
-  cruiseLine?: string | null; // Cruise line name (when transportationType is "Cruise")
-  cruiseShip?: string | null; // Ship name (when transportationType is "Cruise")
+  transportationType?: string | null; // Deprecated - use originTransportationType instead
+  cruiseLine?: string | null; // Cruise line name (when originTransportationType is "Cruise")
+  cruiseShip?: string | null; // Ship name (when originTransportationType is "Cruise")
   accommodationType?: string | null; // optional
 
   // Location details
@@ -56,12 +57,30 @@ export type MediaItem = {
   createdAt: number;
 };
 
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired";
+
+export type UserSubscription = {
+  status: SubscriptionStatus;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  plan?: "trial" | "monthly" | "annual";
+  currentPeriodEnd?: number;
+  cancelAtPeriodEnd?: boolean;
+};
+
 export type UserProfile = {
   uid: string;
   email?: string | null;
   username: string; // required & editable
   photoURL?: string | null;
   role?: "admin" | "user"; // optional role field for admin access
+  subscription?: UserSubscription; // Stripe subscription data
   createdAt: number;
   updatedAt: number;
 };

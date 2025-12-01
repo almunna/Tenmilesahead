@@ -111,11 +111,11 @@ service cloud.firestore {
         }
 
         function validSubitemData() {
+          let isOnShip = 'onShip' in request.resource.data && request.resource.data.onShip == true;
           return request.resource.data.name is string && request.resource.data.name.size() > 0
-            && request.resource.data.city is string
-            && request.resource.data.country is string && request.resource.data.country.size() > 0
             && request.resource.data.createdAt is number
-            && request.resource.data.updatedAt is number;
+            && request.resource.data.updatedAt is number
+            && (isOnShip || (request.resource.data.city is string && request.resource.data.country is string && request.resource.data.country.size() > 0));
         }
 
         allow create: if isOwner(parentOwner()) && validSubitemData();
@@ -132,11 +132,11 @@ service cloud.firestore {
         }
 
         function validSubitemData() {
+          let isOnShip = 'onShip' in request.resource.data && request.resource.data.onShip == true;
           return request.resource.data.name is string && request.resource.data.name.size() > 0
-            && request.resource.data.city is string
-            && request.resource.data.country is string && request.resource.data.country.size() > 0
             && request.resource.data.createdAt is number
-            && request.resource.data.updatedAt is number;
+            && request.resource.data.updatedAt is number
+            && (isOnShip || (request.resource.data.city is string && request.resource.data.country is string && request.resource.data.country.size() > 0));
         }
 
         allow create: if isOwner(parentOwner()) && validSubitemData();
@@ -153,11 +153,11 @@ service cloud.firestore {
         }
 
         function validSubitemData() {
+          let isOnShip = 'onShip' in request.resource.data && request.resource.data.onShip == true;
           return request.resource.data.name is string && request.resource.data.name.size() > 0
-            && request.resource.data.city is string
-            && request.resource.data.country is string && request.resource.data.country.size() > 0
             && request.resource.data.createdAt is number
-            && request.resource.data.updatedAt is number;
+            && request.resource.data.updatedAt is number
+            && (isOnShip || (request.resource.data.city is string && request.resource.data.country is string && request.resource.data.country.size() > 0));
         }
 
         allow create: if isOwner(parentOwner()) && validSubitemData();

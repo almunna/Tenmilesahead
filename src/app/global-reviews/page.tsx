@@ -8,6 +8,7 @@ import { Star, MapPin, Phone, Calendar, ChevronDown, Image as ImageIcon, Hotel, 
 import type { Review, ReviewType, MediaItem } from "@/lib/types";
 import { getCruiseLineNames } from "@/lib/cruiseData";
 import Protected from "@/components/Protected";
+import SubscriptionRequiredModal from "@/components/SubscriptionRequiredModal";
 import { useAuth } from "@/components/AuthProvider";
 
 type ReviewWithMedia = Review & {
@@ -67,7 +68,24 @@ export default function GlobalReviewsPage() {
 }
 
 function GlobalReviewsInner() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  // Check if user has an active subscription
+  const subscription = profile?.subscription;
+  const isSubscribed =
+    (subscription?.status === "active" || subscription?.status === "trialing") &&
+    !subscription?.cancelAtPeriodEnd;
+
+  // Show subscription required modal if not subscribed
+  if (!isSubscribed) {
+    return (
+      <SubscriptionRequiredModal
+        title="Global Reviews"
+        description="Access to global reviews requires an active subscription."
+      />
+    );
+  }
+
   const [allReviews, setAllReviews] = useState<ReviewWithMedia[]>([]);
   const [groupedReviews, setGroupedReviews] = useState<GroupedReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -413,7 +431,7 @@ function GlobalReviewsInner() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container py-8">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-lg text-muted-foreground">Loading reviews...</div>
         </div>
@@ -425,7 +443,7 @@ function GlobalReviewsInner() {
     <div className="min-h-screen">
       {/* Header */}
       <div className="bg-[#2c3e50] border-b border-white/10">
-        <div className="container mx-auto px-4 py-6">
+        <div className="container py-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <Star className="w-6 h-6 sm:w-7 sm:h-7 text-[#f4a261]" fill="#f4a261" />
@@ -647,7 +665,7 @@ function GlobalReviewsInner() {
       </div>
 
       {/* Reviews List */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container py-8">
         {allFilteredReviewCards.length === 0 ? (
           <div className="text-center text-white/70 py-12">
             No reviews found matching your filters.

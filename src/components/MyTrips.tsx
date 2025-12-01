@@ -86,7 +86,7 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
       </div>
 
       {!collapsedTrips && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredTrips.map((t) => (
             <TripTile key={t.id} trip={t} />
           ))}
@@ -769,6 +769,22 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           title="Restaurants"
           tripId={trip.id}
           subcollection="restaurants"
+          extraLeft={[
+            {
+              key: "transportationType",
+              label: "Mode of Transportation",
+              options: [
+                "Airplanes",
+                "Bus",
+                "Car",
+                "Cruise",
+                "RV",
+                "Train",
+                "Uber/Taxi",
+                "Walk",
+              ],
+            },
+          ]}
           onClose={() => setRestaurantsOpen(false)}
         />
       )}

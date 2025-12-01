@@ -13,7 +13,12 @@
       "Bash(npx firebase:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(nul)",
+      "Bash(npm run deploy:rules:*)",
+      "Bash(npx firebase-tools:*)",
+      "Bash(npm run:*)",
+      "Bash(npm ls:*)"
     ],
     "deny": [],
     "ask": []

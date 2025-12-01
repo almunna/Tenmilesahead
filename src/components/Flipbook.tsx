@@ -1,5 +1,5 @@
 "use client";
-import { collection, onSnapshot, orderBy, query, doc } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { MediaItem, Trip } from "@/lib/types";
@@ -46,12 +46,22 @@ export default function Flipbook({
   const deltaX = useRef(0);
   const SWIPE_THRESHOLD = 60; // px
 
+  // --- cover repositioning state ---
+  const [coverPosY, setCoverPosY] = useState<number>(50);
+  const coverDragging = useRef(false);
+  const coverContainerRef = useRef<HTMLDivElement>(null);
+
   // Fetch trip data
   useEffect(() => {
     const tripRef = doc(db, "trips", tripId);
     const unsub = onSnapshot(tripRef, (snap) => {
       if (snap.exists()) {
-        setTrip({ id: snap.id, ...(snap.data() as any) } as Trip);
+        const tripData = { id: snap.id, ...(snap.data() as any) } as Trip;
+        setTrip(tripData);
+        // Sync cover position from trip data
+        if (typeof (tripData as any).coverPositionY === "number") {
+          setCoverPosY((tripData as any).coverPositionY);
+        }
       }
     });
     return () => unsub();
@@ -65,11 +75,11 @@ export default function Flipbook({
     const unsub = onSnapshot(q, (snap) => {
       const arr: MediaItem[] = [];
       snap.forEach((doc) => arr.push({ id: doc.id, ...(doc.data() as any) }));
-      // Sort by takenAt (fallback createdAt) — latest first
+      // Sort by takenAt (fallback createdAt) — earliest first (chronological order: day 1 to day 5)
       arr.sort((a, b) => {
         const aWhen = getMillis((a as any).takenAt ?? (a as any).createdAt);
         const bWhen = getMillis((b as any).takenAt ?? (b as any).createdAt);
-        return bWhen - aWhen;
+        return aWhen - bWhen;
       });
       setItems(arr);
       // Reset to cover page (index 0) if current index is out of bounds
@@ -133,6 +143,34 @@ export default function Flipbook({
     deltaX.current = 0;
   };
 
+  // --- Cover repositioning handlers ---
+  const onCoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation(); // Prevent swipe navigation
+    coverDragging.current = true;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  };
+
+  const onCoverPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!coverDragging.current || !coverContainerRef.current) return;
+    const box = coverContainerRef.current.getBoundingClientRect();
+    const y = e.clientY - box.top;
+    const pct = Math.max(0, Math.min(100, (y / box.height) * 100));
+    setCoverPosY(pct);
+  };
+
+  const onCoverPointerUp = async (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!coverDragging.current) return;
+    coverDragging.current = false;
+    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+    // Save position to Firestore
+    if (trip?.id) {
+      await updateDoc(doc(db, "trips", trip.id), {
+        coverPositionY: coverPosY,
+        updatedAt: Date.now(),
+      } as any);
+    }
+  };
+
   if (!open) return null;
 
   // Get cover media and location string
@@ -174,14 +212,22 @@ export default function Flipbook({
         {isCoverPage ? (
           /* Cover Page - Image with text overlay */
           <div className="w-full h-full flex items-center justify-center p-4">
-            <div className="relative w-full max-w-2xl aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl">
+            <div
+              ref={coverContainerRef}
+              className="relative w-full max-w-2xl aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl"
+              style={{ cursor: coverMedia ? "grab" : "default" }}
+              onPointerDown={coverMedia ? onCoverPointerDown : undefined}
+              onPointerMove={coverMedia ? onCoverPointerMove : undefined}
+              onPointerUp={coverMedia ? onCoverPointerUp : undefined}
+            >
               {/* Background Image */}
               {coverMedia ? (
                 coverMedia.type === "image" ? (
                   <img
                     src={coverMedia.downloadURL}
                     alt={trip?.name || "Cover"}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover select-none"
+                    style={{ objectPosition: `50% ${coverPosY}%` }}
                     draggable={false}
                   />
                 ) : (
@@ -197,10 +243,10 @@ export default function Flipbook({
               )}
 
               {/* Dark gradient overlay at bottom */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
 
               {/* Text overlay at bottom */}
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+              <div className="absolute bottom-0 left-0 right-0 p-6 text-white pointer-events-none">
                 <h1 className="text-3xl font-bold mb-3">{trip?.name || "Trip"}</h1>
 
                 <div className="flex items-start gap-2 mb-2">
@@ -218,9 +264,9 @@ export default function Flipbook({
                 </div>
               </div>
 
-              {/* Optional: Drag to reposition hint */}
+              {/* Drag to reposition hint */}
               {coverMedia && (
-                <div className="absolute top-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white/60">
+                <div className="absolute top-2 right-2 text-[10px] px-2 py-1 rounded bg-black/40 text-white/60 pointer-events-none">
                   Drag to reposition
                 </div>
               )}

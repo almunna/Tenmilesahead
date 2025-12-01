@@ -15,6 +15,7 @@ import {
 import type { Trip, MediaItem } from "@/lib/types";
 import { useAuth } from "@/components/AuthProvider";
 import Protected from "@/components/Protected";
+import SubscriptionRequiredModal from "@/components/SubscriptionRequiredModal";
 import Uploader from "@/components/Uploader";
 import Flipbook from "@/components/Flipbook";
 import EditTripModal from "@/components/EditTripModal";
@@ -56,6 +57,7 @@ type WithId<T> = T & { id: string };
 type SimplePlace = {
   id?: string;
   name: string;
+  onShip?: boolean;
   startDate?: string | null;
   endDate?: string | null;
   city?: string | null;
@@ -187,9 +189,11 @@ function PlaceCard({
   onViewPhotos: () => void;
 }) {
   const isCruise = subcollection === "cruises";
-  const loc = [item.address, item.city, item.state, item.country]
-    .filter(Boolean)
-    .join(", ");
+  const loc = item.onShip
+    ? "On Ship"
+    : [item.address, item.city, item.state, item.country]
+        .filter(Boolean)
+        .join(", ");
 
   return (
     <div className="rounded-xl border border-border p-4 space-y-3">
@@ -398,7 +402,23 @@ function TripInner() {
   const params = useParams<{ tripId: string }>();
   const tripId = params.tripId;
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  // Check if user has an active subscription
+  const subscription = profile?.subscription;
+  const isSubscribed =
+    (subscription?.status === "active" || subscription?.status === "trialing") &&
+    !subscription?.cancelAtPeriodEnd;
+
+  // Show subscription required modal if not subscribed
+  if (!isSubscribed) {
+    return (
+      <SubscriptionRequiredModal
+        title="Trip Details"
+        description="Access to trip details requires an active subscription."
+      />
+    );
+  }
 
   const [trip, setTrip] = useState<Trip | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -967,8 +987,14 @@ function TripInner() {
         <TripDetailMap
           destinations={destinations}
           activities={activities}
+          restaurants={restaurants}
           tripCity={trip.city}
           tripCountry={trip.country}
+          originCity={trip.originCity}
+          originState={trip.originState}
+          originCountry={trip.originCountry}
+          originAddress={trip.originAddress}
+          originTransportationType={trip.originTransportationType}
         />
       )}
 

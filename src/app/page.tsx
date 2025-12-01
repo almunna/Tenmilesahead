@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import Protected from "@/components/Protected";
 import { useAuth } from "@/components/AuthProvider";
 import Flipbook from "@/components/Flipbook";
+import SubscriptionRequiredModal from "@/components/SubscriptionRequiredModal";
 
 import {
   collection,
@@ -164,7 +165,7 @@ function Landing() {
           Effortlessly document all your journeys, from weekend getaways to epic
           adventures across the globe.
         </p>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {features.map((f, i) => (
             <FeatureCard key={i} title={f.title} bullets={f.bullets} />
           ))}
@@ -498,8 +499,127 @@ async function geocodeLocation(
   }
 }
 
+/** Upcoming Trips Countdown - shows countdown to all future trips */
+function UpcomingTripCountdown({ trips }: { trips: WithId<Trip>[] }) {
+  const [now, setNow] = useState(() => new Date());
+
+  // Update every second to keep countdown accurate
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Find all future trips (startDate > today), sorted by start date
+  const upcomingTrips = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return trips
+      .filter((t) => {
+        if (!t.startDate) return false;
+        const startDate = new Date(t.startDate);
+        startDate.setHours(0, 0, 0, 0);
+        return startDate > today;
+      })
+      .sort((a, b) => {
+        const aDate = new Date(a.startDate!);
+        const bDate = new Date(b.startDate!);
+        return aDate.getTime() - bDate.getTime();
+      });
+  }, [trips]);
+
+  // Calculate countdown for a specific trip
+  const getCountdown = (startDateStr: string) => {
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+
+    const diffMs = startDate.getTime() - now.getTime();
+    if (diffMs <= 0) return null;
+
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+    return { days, hours, minutes, seconds };
+  };
+
+  if (upcomingTrips.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-white/20 space-y-4">
+      <p className="text-sm text-white/80 font-medium">
+        Upcoming {upcomingTrips.length === 1 ? "Trip" : "Trips"}
+      </p>
+      {upcomingTrips.map((trip) => {
+        const countdown = getCountdown(trip.startDate!);
+        if (!countdown) return null;
+
+        const destination = [trip.city, trip.country].filter(Boolean).join(", ");
+
+        return (
+          <div key={trip.id} className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold truncate text-white">{trip.name}</p>
+              {destination && (
+                <p className="text-sm text-white/70 truncate">{destination}</p>
+              )}
+            </div>
+            <div className="flex-shrink-0 text-right">
+              <div className="flex items-center gap-1 justify-end">
+                <div className="text-center">
+                  <p className="text-xl font-bold text-white">{countdown.days}</p>
+                  <p className="text-[9px] text-white/70 uppercase">days</p>
+                </div>
+                <span className="text-lg font-bold text-white/50">:</span>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-white">{String(countdown.hours).padStart(2, "0")}</p>
+                  <p className="text-[9px] text-white/70 uppercase">hrs</p>
+                </div>
+                <span className="text-lg font-bold text-white/50">:</span>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-white">{String(countdown.minutes).padStart(2, "0")}</p>
+                  <p className="text-[9px] text-white/70 uppercase">min</p>
+                </div>
+                <span className="text-lg font-bold text-white/50">:</span>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-white">{String(countdown.seconds).padStart(2, "0")}</p>
+                  <p className="text-[9px] text-white/70 uppercase">sec</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function HomeInner() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  // Check if user has an active subscription
+  const subscription = profile?.subscription;
+  const isSubscribed =
+    (subscription?.status === "active" || subscription?.status === "trialing") &&
+    !subscription?.cancelAtPeriodEnd;
+
+  // Show subscription required modal if not subscribed
+  if (!isSubscribed) {
+    return (
+      <SubscriptionRequiredModal
+        title="Homepage"
+        description="Access to the homepage requires an active subscription."
+      />
+    );
+  }
 
   // Display name editor (animates up then hides after successful save)
   const [username, setUsername] = useState("");
@@ -747,18 +867,10 @@ function HomeInner() {
 
         {/* Display name with edit button - shows when username is set and not editing */}
         {username && !isEditingUsername && (
-          <section className="card">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-3xl font-bold">{username}</p>
-              </div>
-              <button
-                className="btn"
-                onClick={() => setIsEditingUsername(true)}
-              >
-                Edit Name
-              </button>
-            </div>
+          <section className="rounded-2xl bg-primary p-6 text-white shadow-lg">
+            <p className="text-3xl font-bold">{username}</p>
+            {/* Upcoming Trip Countdown */}
+            <UpcomingTripCountdown trips={trips} />
           </section>
         )}
 

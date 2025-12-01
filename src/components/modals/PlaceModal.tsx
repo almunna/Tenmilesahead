@@ -26,11 +26,12 @@ type WithId<T> = T & { id: string };
 type SimplePlace = {
   id?: string;
   name: string;
+  onShip?: boolean;
   startDate?: string | null;
   endDate?: string | null;
   city?: string | null;
   state?: string | null;
-  country: string;
+  country?: string | null;
   address?: string | null;
   phoneNumber?: string | null;
   websiteUrl?: string | null;
@@ -128,6 +129,7 @@ export default function PlaceModal({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<SimplePlace>({
     name: "",
+    onShip: false,
     startDate: "",
     endDate: "",
     address: "",
@@ -194,6 +196,10 @@ export default function PlaceModal({
   }, [tripId, subcollection]);
 
   function canSave() {
+    // If on ship, only name is required
+    if (form.onShip) {
+      return !!form.name;
+    }
     return !!form.name && !!form.city && !!form.country;
   }
 
@@ -271,6 +277,7 @@ export default function PlaceModal({
   function resetForm() {
     setForm({
       name: "",
+      onShip: false,
       startDate: "",
       endDate: "",
       address: "",
@@ -296,6 +303,7 @@ export default function PlaceModal({
     setEditingId(r.id!);
     setForm({
       name: r.name,
+      onShip: r.onShip || false,
       startDate: r.startDate || "",
       endDate: r.endDate || "",
       address: r.address || "",
@@ -368,6 +376,22 @@ export default function PlaceModal({
                 />
               </div>
 
+              {/* On Ship checkbox - only for restaurants, activities, accommodations */}
+              {(subcollection === "restaurants" || subcollection === "activities" || subcollection === "accommodations") && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="onShip"
+                    checked={form.onShip || false}
+                    onChange={(e) => setForm({ ...form, onShip: e.target.checked })}
+                    className="w-4 h-4 rounded border-border"
+                  />
+                  <label htmlFor="onShip" className="text-sm cursor-pointer">
+                    On Ship
+                  </label>
+                </div>
+              )}
+
               {/* Start Date and End Date - horizontal row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -394,99 +418,103 @@ export default function PlaceModal({
                 </div>
               </div>
 
-              {/* Country, State, City - horizontal row */}
-              <div className="grid md:grid-cols-3 gap-3">
-                <div>
-                  <label className="label">Country *</label>
-                  <select
-                    className="input"
-                    value={form.country || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, country: e.target.value })
-                    }
-                  >
-                    <option value="">Select country</option>
-                    {COUNTRIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">State / Province / Island *</label>
-                  {availableStates.length ? (
-                    <>
-                      <select
-                        className="input"
-                        value={availableStates.includes(form.state || "") ? form.state : ""}
-                        onChange={(e) => setForm({ ...form, state: e.target.value })}
-                      >
-                        <option value="">Select from list</option>
-                        {availableStates.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
+              {/* Country, State, City - horizontal row (hidden when onShip) */}
+              {!form.onShip && (
+                <div className="grid md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">Country *</label>
+                    <select
+                      className="input"
+                      value={form.country || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, country: e.target.value })
+                      }
+                    >
+                      <option value="">Select country</option>
+                      {COUNTRIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">State / Province / Island *</label>
+                    {availableStates.length ? (
+                      <>
+                        <select
+                          className="input"
+                          value={availableStates.includes(form.state || "") ? form.state : ""}
+                          onChange={(e) => setForm({ ...form, state: e.target.value })}
+                        >
+                          <option value="">Select from list</option>
+                          {availableStates.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          className="input mt-2"
+                          placeholder="Or enter manually (e.g., custom island)"
+                          value={availableStates.includes(form.state || "") ? "" : form.state || ""}
+                          onChange={(e) => setForm({ ...form, state: e.target.value })}
+                        />
+                      </>
+                    ) : (
                       <input
-                        className="input mt-2"
-                        placeholder="Or enter manually (e.g., custom island)"
-                        value={availableStates.includes(form.state || "") ? "" : form.state || ""}
+                        className="input"
+                        placeholder="e.g., California, Bali, etc."
+                        value={form.state || ""}
                         onChange={(e) => setForm({ ...form, state: e.target.value })}
                       />
-                    </>
-                  ) : (
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">City *</label>
                     <input
                       className="input"
-                      placeholder="e.g., California, Bali, etc."
-                      value={form.state || ""}
-                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      value={form.city || ""}
+                      onChange={(e) => setForm({ ...form, city: e.target.value })}
                     />
-                  )}
+                  </div>
                 </div>
-                <div>
-                  <label className="label">City *</label>
-                  <input
-                    className="input"
-                    value={form.city || ""}
-                    onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Address and Phone - horizontal row */}
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Address</label>
-                  <input
-                    className="input"
-                    value={form.address || ""}
-                    onChange={(e) =>
-                      setForm({ ...form, address: e.target.value })
-                    }
-                  />
+              {/* Address and Phone - horizontal row (hidden when onShip) */}
+              {!form.onShip && (
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Address</label>
+                    <input
+                      className="input"
+                      value={form.address || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, address: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Phone</label>
+                    <input
+                      className="input"
+                      type="tel"
+                      inputMode="tel"
+                      value={form.phoneNumber || ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          phoneNumber: formatPhoneUS(e.target.value),
+                        })
+                      }
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="label">Phone</label>
-                  <input
-                    className="input"
-                    type="tel"
-                    inputMode="tel"
-                    value={form.phoneNumber || ""}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        phoneNumber: formatPhoneUS(e.target.value),
-                      })
-                    }
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Accommodation Type - only for accommodations subcollection */}
-              {subcollection === "accommodations" && (
+              {/* Accommodation Type - only for accommodations subcollection, hidden when onShip */}
+              {subcollection === "accommodations" && !form.onShip && (
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <label className="label">Accommodation Type</label>
@@ -562,19 +590,21 @@ export default function PlaceModal({
               )}
             </div>
 
-            {/* Additional Fields */}
-            <div className="mt-3">
-              <label className="label">Website URL</label>
-              <input
-                className="input"
-                type="url"
-                value={form.websiteUrl || ""}
-                onChange={(e) =>
-                  setForm({ ...form, websiteUrl: e.target.value })
-                }
-                placeholder="https://example.com"
-              />
-            </div>
+            {/* Website URL - hidden when onShip */}
+            {!form.onShip && (
+              <div className="mt-3">
+                <label className="label">Website URL</label>
+                <input
+                  className="input"
+                  type="url"
+                  value={form.websiteUrl || ""}
+                  onChange={(e) =>
+                    setForm({ ...form, websiteUrl: e.target.value })
+                  }
+                  placeholder="https://example.com"
+                />
+              </div>
+            )}
 
             <div className="mt-3">
               <label className="label">Notes</label>

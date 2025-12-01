@@ -1,6 +1,7 @@
 "use client";
 import Protected from "@/components/Protected";
 import { useAuth } from "@/components/AuthProvider";
+import SubscriptionRequiredModal from "@/components/SubscriptionRequiredModal";
 import {
   addDoc,
   collection,
@@ -23,6 +24,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Trip, MediaItem } from "@/lib/types";
 import { COUNTRIES, getStates } from "@/lib/geo";
+import { getCruiseLineNames, getShipsForCruiseLine, OTHER_CRUISE_LINE } from "@/lib/cruiseData";
 import EditTripModal from "@/components/EditTripModal";
 import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
 
@@ -77,7 +79,24 @@ export default function TripsPage() {
 }
 
 function TripsInner() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+
+  // Check if user has an active subscription
+  const subscription = profile?.subscription;
+  const isSubscribed =
+    (subscription?.status === "active" || subscription?.status === "trialing") &&
+    !subscription?.cancelAtPeriodEnd;
+
+  // Show subscription required modal if not subscribed
+  if (!isSubscribed) {
+    return (
+      <SubscriptionRequiredModal
+        title="My Trips"
+        description="Access to trips requires an active subscription."
+      />
+    );
+  }
+
   const [trips, setTrips] = useState<Trip[]>([]);
   const [tripsLoaded, setTripsLoaded] = useState(false);
   const [shouldLoadTrips, setShouldLoadTrips] = useState(false); // ← defer trips subscription
@@ -92,7 +111,11 @@ function TripsInner() {
     originState: "",
     originCountry: "",
     originAddress: "",
-    transportationType: "",
+    originTransportationType: "",
+    cruiseLine: "",
+    cruiseShip: "",
+    customCruiseLine: "",
+    customCruiseShip: "",
     specificAddress: "",
     startDate: "",
     endDate: "",
@@ -209,16 +232,22 @@ function TripsInner() {
     }
   }
 
+  // Check if cruise info is complete when Cruise is selected
+  const isCruise = form.originTransportationType === "Cruise";
+  const cruiseLineValue = form.cruiseLine === OTHER_CRUISE_LINE ? form.customCruiseLine : form.cruiseLine;
+  const cruiseShipValue = form.cruiseShip === "Other" ? form.customCruiseShip : form.cruiseShip;
+  const isCruiseComplete = !isCruise || (!!cruiseLineValue && !!cruiseShipValue);
+
   const canSubmit = useMemo(() => {
     return (
       !!form.name &&
       !!form.city &&
       !!form.country &&
-      !!form.transportationType &&
+      isCruiseComplete &&
       !!form.startDate &&
       !!form.endDate
     );
-  }, [form]);
+  }, [form, isCruiseComplete]);
 
   // Defer subscribing to trips until after first paint / browser idle
   useEffect(() => {
@@ -279,7 +308,9 @@ function TripsInner() {
       originState: form.originState || null,
       originCountry: form.originCountry || null,
       originAddress: form.originAddress || null,
-      transportationType: form.transportationType,
+      originTransportationType: form.originTransportationType || null,
+      cruiseLine: isCruise ? cruiseLineValue || null : null,
+      cruiseShip: isCruise ? cruiseShipValue || null : null,
       specificAddress: form.specificAddress || null,
       totalMiles: null,
       startDate: form.startDate,
@@ -356,7 +387,11 @@ function TripsInner() {
       originState: "",
       originCountry: "",
       originAddress: "",
-      transportationType: "",
+      originTransportationType: "",
+      cruiseLine: "",
+      cruiseShip: "",
+      customCruiseLine: "",
+      customCruiseShip: "",
       specificAddress: "",
       startDate: "",
       endDate: "",
@@ -415,7 +450,7 @@ function TripsInner() {
         {/* Skeleton / placeholder while trips subscription is deferred or loading */}
         {!shouldLoadTrips || !tripsLoaded ? (
           <div
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
             aria-busy="true"
           >
             {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -436,7 +471,7 @@ function TripsInner() {
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {trips.map((t) => (
               <TripCard
                 key={t.id}
@@ -479,6 +514,29 @@ function TripsInner() {
               required
             />
           </div>
+
+          {/* Dates */}
+          <div>
+            <label className="label">Start Date *</label>
+            <input
+              className="input"
+              type="date"
+              value={form.startDate}
+              onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <label className="label">End Date *</label>
+            <input
+              className="input"
+              type="date"
+              value={form.endDate}
+              onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+              required
+            />
+          </div>
+          <div></div>{/* Empty div for grid alignment */}
 
           {/* Origin Section Header */}
           <div className="md:col-span-3">
@@ -563,6 +621,38 @@ function TripsInner() {
             />
           </div>
 
+          {/* Origin Mode of Transportation */}
+          <div className="md:col-span-3">
+            <label className="label">Mode of Transportation</label>
+            <select
+              className="input"
+              value={form.originTransportationType}
+              onChange={(e) => {
+                const newTransport = e.target.value;
+                // Reset cruise fields when changing transportation type
+                if (newTransport !== "Cruise") {
+                  setForm({
+                    ...form,
+                    originTransportationType: newTransport,
+                    cruiseLine: "",
+                    cruiseShip: "",
+                    customCruiseLine: "",
+                    customCruiseShip: "",
+                  });
+                } else {
+                  setForm({ ...form, originTransportationType: newTransport });
+                }
+              }}
+            >
+              <option value="">Select transportation</option>
+              {TRANSPORT_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Destination Section Header */}
           <div className="md:col-span-3">
             <h3 className="text-lg font-semibold text-foreground mb-2 mt-4">Destination</h3>
@@ -637,27 +727,95 @@ function TripsInner() {
             />
           </div>
 
-          {/* Mode of Transportation */}
-          <div className="md:col-span-3">
-            <div className="md:w-1/2">
-              <label className="label">Mode of Transportation *</label>
-              <select
-                className="input"
-                value={form.transportationType}
-                onChange={(e) =>
-                  setForm({ ...form, transportationType: e.target.value })
-                }
-                required
-              >
-                <option value="">Select transportation</option>
-                {TRANSPORT_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {/* Cruise Line Selection (only shown when Cruise is selected via origin transportation) */}
+          {isCruise && (
+            <>
+              <div className="md:col-span-3">
+                <label className="label">Cruise Line *</label>
+                <select
+                  className="input"
+                  value={form.cruiseLine}
+                  onChange={(e) => {
+                    const newCruiseLine = e.target.value;
+                    // Reset ship selection when cruise line changes
+                    setForm({
+                      ...form,
+                      cruiseLine: newCruiseLine,
+                      cruiseShip: "",
+                      customCruiseShip: "",
+                    });
+                  }}
+                >
+                  <option value="">Select cruise line</option>
+                  {getCruiseLineNames().map((cl) => (
+                    <option key={cl} value={cl}>
+                      {cl}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Custom Cruise Line (when Other selected) */}
+              {form.cruiseLine === OTHER_CRUISE_LINE && (
+                <div className="md:col-span-3">
+                  <label className="label">Cruise Line Name *</label>
+                  <input
+                    className="input"
+                    placeholder="Enter cruise line name"
+                    value={form.customCruiseLine}
+                    onChange={(e) =>
+                      setForm({ ...form, customCruiseLine: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+
+              {/* Ship Selection */}
+              {form.cruiseLine && (
+                <div className="md:col-span-3">
+                  <label className="label">Ship Name *</label>
+                  {form.cruiseLine === OTHER_CRUISE_LINE ? (
+                    <input
+                      className="input"
+                      placeholder="Enter ship name"
+                      value={form.customCruiseShip}
+                      onChange={(e) =>
+                        setForm({ ...form, customCruiseShip: e.target.value })
+                      }
+                    />
+                  ) : (
+                    <>
+                      <select
+                        className="input"
+                        value={form.cruiseShip}
+                        onChange={(e) =>
+                          setForm({ ...form, cruiseShip: e.target.value })
+                        }
+                      >
+                        <option value="">Select ship</option>
+                        {getShipsForCruiseLine(form.cruiseLine).map((ship) => (
+                          <option key={ship} value={ship}>
+                            {ship}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Custom ship input when Other selected */}
+                      {form.cruiseShip === "Other" && (
+                        <input
+                          className="input mt-2"
+                          placeholder="Enter ship name"
+                          value={form.customCruiseShip}
+                          onChange={(e) =>
+                            setForm({ ...form, customCruiseShip: e.target.value })
+                          }
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           {/* Specific Address */}
           <div className="md:col-span-3">
@@ -669,28 +827,6 @@ function TripsInner() {
               onChange={(e) =>
                 setForm({ ...form, specificAddress: e.target.value })
               }
-            />
-          </div>
-
-          {/* Dates */}
-          <div>
-            <label className="label">Start Date *</label>
-            <input
-              className="input"
-              type="date"
-              value={form.startDate}
-              onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="label">End Date *</label>
-            <input
-              className="input"
-              type="date"
-              value={form.endDate}
-              onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-              required
             />
           </div>
 
@@ -811,7 +947,11 @@ function TripsInner() {
                   originState: "",
                   originCountry: "",
                   originAddress: "",
-                  transportationType: "",
+                  originTransportationType: "",
+                  cruiseLine: "",
+                  cruiseShip: "",
+                  customCruiseLine: "",
+                  customCruiseShip: "",
                   specificAddress: "",
                   startDate: "",
                   endDate: "",

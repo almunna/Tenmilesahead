@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/components/AuthProvider";
 import AdminProtected from "@/components/AdminProtected";
+import SubscriptionRequiredModal from "@/components/SubscriptionRequiredModal";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit, addDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -23,6 +24,23 @@ export default function AdminDashboard() {
 
 function AdminDashboardInner() {
   const { user, profile } = useAuth();
+
+  // Check if user has an active subscription
+  const subscription = profile?.subscription;
+  const isSubscribed =
+    (subscription?.status === "active" || subscription?.status === "trialing") &&
+    !subscription?.cancelAtPeriodEnd;
+
+  // Show subscription required modal if not subscribed
+  if (!isSubscribed) {
+    return (
+      <SubscriptionRequiredModal
+        title="Admin Dashboard"
+        description="Access to the admin dashboard requires an active subscription."
+      />
+    );
+  }
+
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalTrips: 0,
