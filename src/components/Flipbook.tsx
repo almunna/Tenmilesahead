@@ -23,6 +23,169 @@ function fmtMDY(s: string | undefined | null) {
   return str;
 }
 
+// Zoomable Image Viewer Component
+function ZoomableImage({
+  src,
+  alt,
+  onClose
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const positionStart = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setScale(prev => Math.min(Math.max(0.5, prev + delta), 5));
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (scale <= 1) return;
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    positionStart.current = position;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    setPosition({
+      x: positionStart.current.x + dx,
+      y: positionStart.current.y + dy,
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const zoomIn = () => setScale(prev => Math.min(prev + 0.5, 5));
+  const zoomOut = () => {
+    setScale(prev => {
+      const newScale = Math.max(prev - 0.5, 1);
+      if (newScale <= 1) setPosition({ x: 0, y: 0 });
+      return newScale;
+    });
+  };
+  const resetZoom = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  // Handle keyboard
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "+" || e.key === "=") zoomIn();
+      if (e.key === "-") zoomOut();
+      if (e.key === "0") resetZoom();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/95 flex flex-col"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-black/50">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={zoomOut}
+            disabled={scale <= 1}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all"
+            title="Zoom Out (-)"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+            </svg>
+          </button>
+          <span className="text-white/70 text-sm min-w-[60px] text-center">{Math.round(scale * 100)}%</span>
+          <button
+            onClick={zoomIn}
+            disabled={scale >= 5}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all"
+            title="Zoom In (+)"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+            </svg>
+          </button>
+          <button
+            onClick={resetZoom}
+            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all ml-2"
+            title="Reset (0)"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span className="text-sm">Close</span>
+        </button>
+      </div>
+
+      {/* Image Container */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-hidden flex items-center justify-center"
+        onWheel={handleWheel}
+        style={{ cursor: scale > 1 ? (isDragging ? "grabbing" : "grab") : "zoom-in" }}
+        onClick={(e) => {
+          if (scale <= 1 && e.target === e.currentTarget) {
+            // Don't zoom on background click
+          }
+        }}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-none select-none transition-transform duration-100"
+          style={{
+            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+            maxHeight: scale === 1 ? "90vh" : "none",
+            maxWidth: scale === 1 ? "90vw" : "none",
+          }}
+          draggable={false}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (scale === 1) zoomIn();
+          }}
+        />
+      </div>
+
+      {/* Helper text */}
+      <div className="text-center py-2 text-white/50 text-xs">
+        {scale > 1 ? "Drag to pan • Scroll to zoom • Click outside or ESC to close" : "Click image to zoom • Scroll to zoom • ESC to close"}
+      </div>
+    </div>
+  );
+}
+
 export default function Flipbook({
   tripId,
   open,
@@ -37,6 +200,7 @@ export default function Flipbook({
   const [currentPage, setCurrentPage] = useState(0);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<"next" | "prev" | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; alt: string } | null>(null);
 
   // Swipe state
   const dragging = useRef(false);
@@ -110,17 +274,18 @@ export default function Flipbook({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!open) return;
+      if (!open || zoomedImage) return;
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowLeft") prev();
       if (e.key === "ArrowRight") next();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, prev, next, onClose]);
+  }, [open, prev, next, onClose, zoomedImage]);
 
   // Pointer handlers for swipe
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (zoomedImage) return;
     dragging.current = true;
     startX.current = e.clientX;
     deltaX.current = 0;
@@ -128,12 +293,12 @@ export default function Flipbook({
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
+    if (!dragging.current || zoomedImage) return;
     deltaX.current = e.clientX - startX.current;
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
+    if (!dragging.current || zoomedImage) return;
     dragging.current = false;
     e.currentTarget.releasePointerCapture(e.pointerId);
 
@@ -173,6 +338,11 @@ export default function Flipbook({
     }
   };
 
+  // Open image in zoom viewer
+  const openZoomedImage = (src: string, alt: string) => {
+    setZoomedImage({ src, alt });
+  };
+
   if (!open) return null;
 
   const coverMedia = trip && items.find((m) => m.id === trip.coverMediaId);
@@ -189,6 +359,15 @@ export default function Flipbook({
 
   return (
     <div className="fixed inset-0 z-[100] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+      {/* Zoomed Image Viewer */}
+      {zoomedImage && (
+        <ZoomableImage
+          src={zoomedImage.src}
+          alt={zoomedImage.alt}
+          onClose={() => setZoomedImage(null)}
+        />
+      )}
+
       {/* Ambient light effect */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[100px]" />
@@ -302,14 +481,31 @@ export default function Flipbook({
               ) : currentMediaIndex > 0 ? (
                 /* Previous Photo */
                 <div className="w-full h-full p-4 flex flex-col">
-                  <div className="flex-1 flex items-center justify-center rounded-lg overflow-hidden bg-slate-100 relative min-h-0">
+                  <div
+                    className="flex-1 flex items-center justify-center rounded-lg overflow-hidden bg-slate-100 relative min-h-0 cursor-zoom-in group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (items[currentMediaIndex - 1]?.type === "image") {
+                        openZoomedImage(items[currentMediaIndex - 1].downloadURL, items[currentMediaIndex - 1].caption || "");
+                      }
+                    }}
+                  >
                     {items[currentMediaIndex - 1]?.type === "image" ? (
-                      <img
-                        src={items[currentMediaIndex - 1].downloadURL}
-                        alt={items[currentMediaIndex - 1].caption || ""}
-                        className="max-w-full max-h-full object-contain"
-                        draggable={false}
-                      />
+                      <>
+                        <img
+                          src={items[currentMediaIndex - 1].downloadURL}
+                          alt={items[currentMediaIndex - 1].caption || ""}
+                          className="max-w-full max-h-full object-contain"
+                          draggable={false}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-2">
+                            <svg className="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </>
                     ) : items[currentMediaIndex - 1] ? (
                       <video
                         src={items[currentMediaIndex - 1].downloadURL}
@@ -428,14 +624,31 @@ export default function Flipbook({
               ) : currentMedia ? (
                 /* Current Photo */
                 <div className="w-full h-full p-4 flex flex-col">
-                  <div className="flex-1 flex items-center justify-center rounded-lg overflow-hidden bg-slate-100 relative shadow-lg min-h-0">
+                  <div
+                    className="flex-1 flex items-center justify-center rounded-lg overflow-hidden bg-slate-100 relative shadow-lg min-h-0 cursor-zoom-in group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (currentMedia.type === "image") {
+                        openZoomedImage(currentMedia.downloadURL, currentMedia.caption || "");
+                      }
+                    }}
+                  >
                     {currentMedia.type === "image" ? (
-                      <img
-                        src={currentMedia.downloadURL}
-                        alt={currentMedia.caption || ""}
-                        className="max-w-full max-h-full object-contain"
-                        draggable={false}
-                      />
+                      <>
+                        <img
+                          src={currentMedia.downloadURL}
+                          alt={currentMedia.caption || ""}
+                          className="max-w-full max-h-full object-contain"
+                          draggable={false}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-3">
+                            <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <video
                         src={currentMedia.downloadURL}
@@ -529,6 +742,13 @@ export default function Flipbook({
           </div>
         )}
       </div>
+
+      {/* Hint text */}
+      {!isCoverPage && currentMedia?.type === "image" && (
+        <div className="text-center pb-2 text-white/40 text-xs">
+          Click on photo to zoom and view full quality
+        </div>
+      )}
 
       {/* CSS Animations */}
       <style jsx>{`
