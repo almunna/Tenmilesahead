@@ -549,13 +549,13 @@ export default function WorldMap({
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[75%_25%] gap-4">
         <div
           ref={mapContainer}
-          className="min-h-[500px] sm:min-h-[600px] md:min-h-[700px] lg:min-h-[750px] w-full rounded-xl overflow-hidden border border-border"
-          style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', minHeight: '500px', backgroundColor: '#aad3df' }}
+          className="min-h-[350px] sm:min-h-[500px] md:min-h-[700px] lg:min-h-[750px] w-full rounded-xl overflow-hidden border border-border"
+          style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', minHeight: '350px', backgroundColor: '#aad3df' }}
         />
 
         <div className="rounded-xl border border-border p-3">
           <div className="text-sm font-semibold mb-2">Trip Pins</div>
-          <ul className="max-h-[450px] sm:max-h-[550px] md:max-h-[650px] lg:max-h-[700px] overflow-auto text-sm space-y-1">
+          <ul className="max-h-[300px] sm:max-h-[450px] md:max-h-[650px] lg:max-h-[700px] overflow-auto text-sm space-y-1">
             {trips.map((t) => {
               const fullLocation = [t.city, t.state, t.country].filter(Boolean).join(", ") || "—";
               return (

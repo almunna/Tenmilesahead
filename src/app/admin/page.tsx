@@ -147,7 +147,7 @@ function AdminDashboardInner() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Admin Header */}
       <header className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-3 sm:px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-haiti-900">
@@ -172,7 +172,7 @@ function AdminDashboardInner() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">

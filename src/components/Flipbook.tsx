@@ -314,21 +314,28 @@ export default function Flipbook({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, prev, next, onClose, zoomedImage]);
 
-  // Pointer handlers for swipe - don't capture pointer to allow clicks on images
+  // Track if this was a swipe or a tap (for mobile)
+  const wasSwipe = useRef(false);
+  const startY = useRef(0);
+
+  // Pointer handlers for swipe - works on mobile and desktop
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (zoomedImage) return;
-    // Only start drag tracking on the container itself, not on child elements
-    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('.cursor-zoom-in')) {
-      return; // Don't track swipe when clicking on zoomable images
-    }
     dragging.current = true;
     startX.current = e.clientX;
+    startY.current = e.clientY;
     deltaX.current = 0;
+    wasSwipe.current = false;
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current || zoomedImage) return;
     deltaX.current = e.clientX - startX.current;
+    const deltaY = Math.abs(e.clientY - startY.current);
+    // Mark as swipe if horizontal movement is significant
+    if (Math.abs(deltaX.current) > 10 && Math.abs(deltaX.current) > deltaY) {
+      wasSwipe.current = true;
+    }
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -337,11 +344,23 @@ export default function Flipbook({
 
     const dx = deltaX.current;
     if (dx <= -SWIPE_THRESHOLD && items.length > 0) {
+      wasSwipe.current = true;
       next();
     } else if (dx >= SWIPE_THRESHOLD && items.length > 0) {
+      wasSwipe.current = true;
       prev();
     }
     deltaX.current = 0;
+  };
+
+  // Handle tap on image to zoom (only if not swiping)
+  const handleImageTap = (e: React.MouseEvent, src: string, alt: string, tripInfo?: { name: string; location: string; dateRange: string }) => {
+    // Small delay to check if this was a swipe
+    setTimeout(() => {
+      if (!wasSwipe.current) {
+        openZoomedImage(src, alt, tripInfo);
+      }
+    }, 10);
   };
 
   // Open image in zoom viewer
@@ -419,7 +438,7 @@ export default function Flipbook({
       {/* Main Book Container */}
       <div
         className="flex-1 flex items-center justify-center relative px-2 sm:px-4 py-2 sm:py-6"
-        style={{ touchAction: "pan-y" }}
+        style={{ touchAction: "pan-y pinch-zoom" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -438,9 +457,8 @@ export default function Flipbook({
                 <div
                   className={`flex-1 relative ${coverMedia?.type === "image" ? "cursor-zoom-in" : ""}`}
                   onClick={(e) => {
-                    e.stopPropagation();
                     if (coverMedia?.type === "image") {
-                      openZoomedImage(coverMedia.downloadURL, trip?.name || "Cover", {
+                      handleImageTap(e, coverMedia.downloadURL, trip?.name || "Cover", {
                         name: trip?.name || "Trip",
                         location: locationStr,
                         dateRange: dateRange
@@ -504,9 +522,8 @@ export default function Flipbook({
                 <div
                   className="flex-1 flex items-center justify-center bg-slate-100 relative cursor-zoom-in min-h-0"
                   onClick={(e) => {
-                    e.stopPropagation();
                     if (currentMedia.type === "image") {
-                      openZoomedImage(currentMedia.downloadURL, currentMedia.caption || "");
+                      handleImageTap(e, currentMedia.downloadURL, currentMedia.caption || "");
                     }
                   }}
                 >
@@ -878,7 +895,8 @@ export default function Flipbook({
       {/* Hint text */}
       {!isCoverPage && currentMedia?.type === "image" && (
         <div className="text-center pb-2 text-white/40 text-xs">
-          Click on photo to zoom and view full quality
+          <span className="hidden sm:inline">Click on photo to zoom and view full quality</span>
+          <span className="sm:hidden">Swipe to navigate • Tap to zoom</span>
         </div>
       )}
 
