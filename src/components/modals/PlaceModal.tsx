@@ -21,6 +21,14 @@ import { db, storage, auth } from "@/lib/firebase";
 import { COUNTRIES, getStates } from "@/lib/geo";
 import ItemFlipbook from "./ItemFlipbook";
 
+// Properly singularize title names (Activities → Activity, Destinations → Destination, etc.)
+function singularize(title: string): string {
+  if (title === "Activities") return "Activity";
+  if (title.endsWith("ies")) return title.slice(0, -3) + "y";
+  if (title.endsWith("s")) return title.slice(0, -1);
+  return title;
+}
+
 type WithId<T> = T & { id: string };
 
 type SimplePlace = {
@@ -231,7 +239,7 @@ export default function PlaceModal({
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
-          caption: `${title.slice(0, -1)} • ${form.name}`,
+          caption: `${singularize(title)} • ${form.name}`,
           linkedSubcollection: subcollection,
           linkedId: editingId,
         } as any);
@@ -264,7 +272,7 @@ export default function PlaceModal({
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
-          caption: `${title.slice(0, -1)} • ${form.name}`,
+          caption: `${singularize(title)} • ${form.name}`,
           linkedSubcollection: subcollection,
           linkedId: rowRef.id,
         } as any);
@@ -529,15 +537,14 @@ export default function PlaceModal({
                       }
                     >
                       <option value="">Select accommodation</option>
-                      <option value="Apartment / Airbnb">
-                        Apartment / Airbnb
-                      </option>
-                      <option value="Camping">Camping</option>
+                      <option value="Airbnb/VRBO">Airbnb/VRBO</option>
+                      <option value="Camp">Camp</option>
+                      <option value="Condo">Condo</option>
                       <option value="Cruise">Cruise</option>
-                      <option value="Friend/Family">Friend/Family</option>
-                      <option value="Guesthouse">Guesthouse</option>
+                      <option value="Friends/Family">Friends/Family</option>
                       <option value="Hostel">Hostel</option>
                       <option value="Hotel">Hotel</option>
+                      <option value="House">House</option>
                       <option value="Resort">Resort</option>
                       <option value="Other">Other</option>
                     </select>

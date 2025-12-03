@@ -103,11 +103,17 @@ export default function TripDetailMap({
         preferCanvas: true,
         fadeAnimation: true,
         zoomAnimation: true,
+        minZoom: 2,
+        worldCopyJump: true, // Jump to the "main" world copy when panning far
+        maxBounds: [[-85, -Infinity], [85, Infinity]], // Restrict vertical, allow horizontal wrap
+        maxBoundsViscosity: 1.0, // Rigid vertical bounds
       }).setView([20, 0], 2);
 
-      L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
+      // Add CartoDB Voyager tiles (free, English labels worldwide!)
+      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19,
         minZoom: 2,
+        subdomains: 'abcd',
       }).addTo(map.current);
 
       // Map is ready

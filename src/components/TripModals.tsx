@@ -26,6 +26,20 @@ import { COUNTRIES, getStates } from "@/lib/geo";
 
 /* --------------------------- shared helpers --------------------------- */
 
+// Properly singularize title names (Activities → Activity, Destinations → Destination, etc.)
+function singularize(title: string): string {
+  if (title === "Activities") return "Activity";
+  if (title.endsWith("ies")) return title.slice(0, -3) + "y";
+  if (title.endsWith("s")) return title.slice(0, -1);
+  return title;
+}
+
+/** Fix legacy captions with typos (e.g., "Activitie" → "Activity") */
+function fixCaption(caption: string | undefined | null): string {
+  if (!caption) return "";
+  return caption.replace(/\bActivitie\b/g, "Activity");
+}
+
 function fmtMDY(s?: string | number | null) {
   if (!s) return "";
   if (typeof s === "string") {
@@ -668,7 +682,7 @@ export function PlaceModal({
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
-          caption: `${title.slice(0, -1)} • ${form.name}`,
+          caption: `${singularize(title)} • ${form.name}`,
           linkedSubcollection: subcollection,
           linkedId: editingId,
         } as any);
@@ -700,7 +714,7 @@ export function PlaceModal({
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
-          caption: `${title.slice(0, -1)} • ${form.name}`,
+          caption: `${singularize(title)} • ${form.name}`,
           linkedSubcollection: subcollection,
           linkedId: rowRef.id,
         } as any);
@@ -1209,7 +1223,7 @@ export function ItemFlipbook({
 
         {items.length > 0 && (
           <div className="px-4 py-3 border-t border-border text-center text-sm text-muted-foreground">
-            {items[index].caption || ""}
+            {fixCaption(items[index].caption)}
           </div>
         )}
       </div>

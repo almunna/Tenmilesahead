@@ -61,7 +61,7 @@ function clamp(n: number, min: number, max: number) {
 }
 
 const TRANSPORT_OPTIONS = [
-  "Airplanes",
+  "Airplane",
   "Bus",
   "Car",
   "Cruise",

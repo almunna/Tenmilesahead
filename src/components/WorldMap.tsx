@@ -51,18 +51,20 @@ export default function WorldMap({
         fadeAnimation: true,
         zoomAnimation: true,
         minZoom: calculatedMinZoom,
-        maxBounds: [[-85, -180], [85, 180]], // Slightly less than full extent to avoid edge issues
-        maxBoundsViscosity: 1.0, // Rigid bounds - can't pan outside
+        worldCopyJump: true, // Jump to the "main" world copy when panning far
+        maxBounds: [[-85, -Infinity], [85, Infinity]], // Restrict vertical, allow horizontal wrap
+        maxBoundsViscosity: 1.0, // Rigid vertical bounds
       }).setView([20, 0], calculatedMinZoom);
 
-      // Add OpenStreetMap tiles (free!)
-      L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
+      // Add CartoDB Voyager tiles (free, English labels worldwide!)
+      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19,
         minZoom: calculatedMinZoom,
         keepBuffer: 4, // Keep extra tiles loaded around the visible area
         updateWhenIdle: false, // Update tiles while panning
         updateWhenZooming: false,
         crossOrigin: true,
+        subdomains: 'abcd',
       }).addTo(map.current);
     });
 
@@ -109,54 +111,7 @@ export default function WorldMap({
         }
       }
 
-      // SECOND: Add origin markers (green pins for starting points)
-      for (const trip of trips) {
-        // Only add origin marker if origin city and country are set
-        if (trip.originCity && trip.originCountry) {
-          const originCoords = await getCoordinates(trip.originAddress, trip.originCity, trip.originState, trip.originCountry);
-
-          if (originCoords && map.current) {
-            // Create custom green pin icon for origin
-            const originIcon = L.default.divIcon({
-              html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
-                  fill="#16a34a"
-                  stroke="#15803d"
-                  stroke-width="2"/>
-                <circle cx="16" cy="16" r="6" fill="white"/>
-              </svg>`,
-              className: "custom-leaflet-marker",
-              iconSize: [24, 32],
-              iconAnchor: [12, 32],
-              popupAnchor: [0, -32],
-            });
-
-            // Create origin marker
-            const originMarker = L.default.marker([originCoords[1], originCoords[0]], {
-              icon: originIcon,
-            });
-
-            // Create popup for origin
-            const originPopupContent = `
-              <div style="padding: 8px; min-width: 200px;">
-                <strong style="font-size: 14px; color: #16a34a;">Starting Point</strong><br/>
-                <span style="font-size: 13px;">${trip.name}</span><br/>
-                <span style="color: #666; font-size: 12px;">
-                  ${trip.originCity}${trip.originState ? ", " + trip.originState : ""}, ${trip.originCountry}
-                </span>
-              </div>
-            `;
-
-            originMarker.bindPopup(originPopupContent);
-            originMarker.addTo(map.current);
-            markersRef.current.push(originMarker);
-
-            validCoordinates.push([originCoords[1], originCoords[0]]);
-          }
-        }
-      }
-
-      // THIRD: Add destination markers (red pins) for trips that have city coordinates
+      // SECOND: Add destination markers (red pins) for trips that have city coordinates
       for (const trip of trips) {
         // Skip trips without city for marker placement (but country already collected above)
         if (!trip.city || !trip.country) {
@@ -280,28 +235,28 @@ export default function WorldMap({
             'dominica': ['dominica'],
             'saint vincent and the grenadines': ['saint vincent and the grenadines'],
             'saint vincent and grenadines': ['saint vincent and the grenadines'],
-            'anguilla': ['anguilla', 'united kingdom', 'united states of america'], // UK territory (also shade USA per user request)
-            'aruba': ['aruba', 'netherlands'],
-            'bonaire': ['bonaire', 'caribbean netherlands', 'netherlands'],
-            'curacao': ['curacao', 'curaçao', 'netherlands'],
-            'curaçao': ['curacao', 'curaçao', 'netherlands'],
-            'bermuda': ['bermuda', 'united kingdom'],
-            'cayman islands': ['cayman islands', 'united kingdom'],
-            'turks and caicos islands': ['turks and caicos islands', 'united kingdom'],
-            'turks and caicos': ['turks and caicos islands', 'united kingdom'],
-            'british virgin islands': ['british virgin islands', 'united kingdom'],
-            'u.s. virgin islands': ['united states virgin islands', 'u.s. virgin islands', 'united states of america'],
+            'anguilla': ['anguilla'],
+            'aruba': ['aruba'],
+            'bonaire': ['bonaire', 'caribbean netherlands'],
+            'curacao': ['curacao', 'curaçao'],
+            'curaçao': ['curacao', 'curaçao'],
+            'bermuda': ['bermuda'],
+            'cayman islands': ['cayman islands'],
+            'turks and caicos islands': ['turks and caicos islands'],
+            'turks and caicos': ['turks and caicos islands'],
+            'british virgin islands': ['british virgin islands'],
+            'u.s. virgin islands': ['united states virgin islands', 'u.s. virgin islands'],
             'virgin islands': ['united states virgin islands', 'british virgin islands'],
-            'guadeloupe': ['guadeloupe', 'france'],
-            'guadeloupe (france)': ['guadeloupe', 'france'],
-            'martinique': ['martinique', 'france'],
-            'martinique (france)': ['martinique', 'france'],
-            'sint maarten': ['sint maarten', 'netherlands'],
-            'st. maarten': ['sint maarten', 'netherlands'],
-            'saint martin': ['saint martin', 'sint maarten', 'france'],
-            'st. martin': ['saint martin', 'sint maarten', 'france'],
-            'netherlands antilles': ['netherlands', 'sint maarten', 'curacao'],
-            'montserrat': ['montserrat', 'united kingdom'],
+            'guadeloupe': ['guadeloupe'],
+            'guadeloupe (france)': ['guadeloupe'],
+            'martinique': ['martinique'],
+            'martinique (france)': ['martinique'],
+            'sint maarten': ['sint maarten'],
+            'st. maarten': ['sint maarten'],
+            'saint martin': ['saint martin', 'sint maarten'],
+            'st. martin': ['saint martin', 'sint maarten'],
+            'netherlands antilles': ['sint maarten', 'curacao'],
+            'montserrat': ['montserrat'],
             // Europe
             'united kingdom': ['united kingdom', 'uk', 'great britain'],
             'uk': ['united kingdom'],
@@ -312,7 +267,8 @@ export default function WorldMap({
             'northern ireland': ['united kingdom'],
             'ireland': ['ireland'],
             'france': ['france', 'french republic'],
-            'france (mayotte)': ['france', 'mayotte'],
+            'france (mayotte)': ['mayotte'],
+            'mayotte': ['mayotte'],
             'germany': ['germany', 'federal republic of germany'],
             'italy': ['italy', 'italian republic'],
             'spain': ['spain', 'kingdom of spain'],
@@ -344,7 +300,7 @@ export default function WorldMap({
             'norway': ['norway'],
             'finland': ['finland'],
             'iceland': ['iceland'],
-            'greenland': ['greenland', 'denmark'],
+            'greenland': ['greenland'],
             'estonia': ['estonia'],
             'latvia': ['latvia'],
             'lithuania': ['lithuania'],
@@ -496,23 +452,14 @@ export default function WorldMap({
 
           // Filter GeoJSON to only include visited countries
           const visitedFeatures = countriesGeoJSON.features.filter((feature: any) => {
-            // Try multiple property names for country name (Natural Earth uses ADMIN, NAME, NAME_LONG, SOVEREIGNT)
+            // Try multiple property names for country name (Natural Earth uses ADMIN, NAME, NAME_LONG)
             const props = feature.properties;
             const geoCountryName = props.ADMIN || props.NAME || props.name || props.NAME_LONG || '';
             const geoCountryLower = geoCountryName.toLowerCase().trim();
 
-            // Also check sovereign nation for territories
-            const sovereignName = (props.SOVEREIGNT || props.SOV_A3 || '').toLowerCase().trim();
-
             // Check direct match against our expanded set
             if (countriesToShade.has(geoCountryLower)) {
               console.log('Direct match found:', geoCountryLower);
-              return true;
-            }
-
-            // Check sovereign name (for territories)
-            if (sovereignName && countriesToShade.has(sovereignName)) {
-              console.log('Sovereign match found:', geoCountryLower, '-> sovereign:', sovereignName);
               return true;
             }
 
@@ -597,12 +544,6 @@ export default function WorldMap({
       <h2 className="text-xl font-semibold">World Map</h2>
       <p className="text-muted-foreground text-sm mt-1">
         Visited countries are shaded in pink. Click a pin to view details.
-        <span className="inline-flex items-center gap-2 ml-2">
-          <span className="inline-block w-3 h-3 rounded-full bg-[#16a34a]"></span>
-          <span className="text-xs">Starting Point</span>
-          <span className="inline-block w-3 h-3 rounded-full bg-[#DC2626]"></span>
-          <span className="text-xs">Destination</span>
-        </span>
       </p>
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[75%_25%] gap-4">
@@ -615,27 +556,30 @@ export default function WorldMap({
         <div className="rounded-xl border border-border p-3">
           <div className="text-sm font-semibold mb-2">Trip Pins</div>
           <ul className="max-h-[450px] sm:max-h-[550px] md:max-h-[650px] lg:max-h-[700px] overflow-auto text-sm space-y-1">
-            {trips.map((t) => (
-              <li
-                key={t.id}
-                className="flex items-center justify-between gap-2"
-              >
-                <button
-                  onClick={() => handlePinClick(t.id)}
-                  className="flex-1 truncate text-left hover:text-[#66bfcc] transition-colors"
+            {trips.map((t) => {
+              const fullLocation = [t.city, t.state, t.country].filter(Boolean).join(", ") || "—";
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-2"
                 >
-                  <span className="mr-2">📍</span>
-                  {t.city || "—"}, {t.state ? `${t.state}, ` : ""}
-                  {t.country || "—"}
-                </button>
-                <button
-                  className="navlink text-xs flex-shrink-0"
-                  onClick={() => onOpenFlip(t.id)}
-                >
-                  View Flipbook
-                </button>
-              </li>
-            ))}
+                  <button
+                    onClick={() => handlePinClick(t.id)}
+                    className="flex-1 truncate text-left hover:text-[#66bfcc] transition-colors"
+                    title={`${t.name}\n${fullLocation}`}
+                  >
+                    <span className="mr-2">📍</span>
+                    {fullLocation}
+                  </button>
+                  <button
+                    className="navlink text-xs flex-shrink-0"
+                    onClick={() => onOpenFlip(t.id)}
+                  >
+                    View Flipbook
+                  </button>
+                </li>
+              );
+            })}
             {trips.length === 0 && (
               <li className="text-muted-foreground">No trips yet.</li>
             )}

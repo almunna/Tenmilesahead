@@ -52,6 +52,12 @@ function autoSizeTextarea(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
+/** Fix legacy captions with typos (e.g., "Activitie" → "Activity") */
+function fixCaption(caption: string | undefined | null): string {
+  if (!caption) return "";
+  return caption.replace(/\bActivitie\b/g, "Activity");
+}
+
 type WithId<T> = T & { id: string };
 
 type SimplePlace = {
@@ -695,15 +701,34 @@ function TripInner() {
 
   const itineraryRows = useMemo(() => {
     const rows: Array<{
-      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant" | "Cruise";
+      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant" | "Cruise" | "Primary Destination";
       subcollection:
         | "destinations"
         | "activities"
         | "accommodations"
         | "restaurants"
-        | "cruises";
+        | "cruises"
+        | "trip";
       data: WithId<SimplePlace>;
     }> = [];
+
+    // Add the main trip destination as the primary destination
+    if (trip) {
+      rows.push({
+        kind: "Primary Destination",
+        subcollection: "trip",
+        data: {
+          id: "trip-destination",
+          name: trip.city || trip.country,
+          city: trip.city,
+          state: trip.state || null,
+          country: trip.country,
+          address: trip.specificAddress || null,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+        },
+      });
+    }
 
     destinations.forEach((d) =>
       rows.push({ kind: "Destination", subcollection: "destinations", data: d })
@@ -732,7 +757,7 @@ function TripInner() {
     });
 
     return rows;
-  }, [destinations, activities, accommodations, restaurants, cruises]);
+  }, [trip, destinations, activities, accommodations, restaurants, cruises]);
   // ---- END NEW ----
 
   return (
@@ -963,7 +988,7 @@ function TripInner() {
                   <label className="label">Caption</label>
                   <textarea
                     className="input h-auto min-h-[44px] leading-5 resize-none overflow-hidden"
-                    defaultValue={m.caption || ""}
+                    defaultValue={fixCaption(m.caption)}
                     ref={autoSizeTextarea}
                     onInput={(e) => autoSizeTextarea(e.currentTarget)}
                     onBlur={(e) => saveCaption(m.id!, e.target.value)}
@@ -1032,18 +1057,22 @@ function TripInner() {
                       </td>
                       <td className="px-3 py-2">{loc || "—"}</td>
                       <td className="px-3 py-2">
-                        <button
-                          className="text-xs navlink whitespace-nowrap"
-                          onClick={() =>
-                            setSelectedItem({
-                              id: d.id!,
-                              name: d.name,
-                              subcollection: row.subcollection,
-                            })
-                          }
-                        >
-                          View Photos
-                        </button>
+                        {row.subcollection !== "trip" ? (
+                          <button
+                            className="text-xs navlink whitespace-nowrap"
+                            onClick={() =>
+                              setSelectedItem({
+                                id: d.id!,
+                                name: d.name,
+                                subcollection: row.subcollection as "destinations" | "activities" | "accommodations" | "restaurants" | "cruises",
+                              })
+                            }
+                          >
+                            View Photos
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   );

@@ -40,7 +40,7 @@ const sortAZWithOtherLast = (
 
 /** Duplicated so nothing else in the app needs to change */
 const TRANSPORT_OPTIONS = [
-  "Airplanes",
+  "Airplane",
   "Bus",
   "Car",
   "Cruise",
@@ -51,13 +51,14 @@ const TRANSPORT_OPTIONS = [
 ];
 
 const ACCOMMODATION_OPTIONS = [
-  "Apartment / Airbnb",
-  "Camping",
+  "Airbnb/VRBO",
+  "Camp",
+  "Condo",
   "Cruise",
-  "Friend/Family",
-  "Guesthouse",
+  "Friends/Family",
   "Hostel",
   "Hotel",
+  "House",
   "Resort",
   "Other",
 ];

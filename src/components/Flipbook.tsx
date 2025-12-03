@@ -23,6 +23,12 @@ function fmtMDY(s: string | undefined | null) {
   return str;
 }
 
+/** Fix legacy captions with typos (e.g., "Activitie" → "Activity") */
+function fixCaption(caption: string | undefined | null): string {
+  if (!caption) return "";
+  return caption.replace(/\bActivitie\b/g, "Activity");
+}
+
 // Zoomable Image Viewer Component
 function ZoomableImage({
   src,
@@ -376,27 +382,27 @@ export default function Flipbook({
       </div>
 
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-4">
+      <div className="relative z-10 flex items-center justify-between px-3 sm:px-6 py-2 sm:py-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={onClose}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all backdrop-blur-sm border border-white/10"
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all backdrop-blur-sm border border-white/10"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-            <span className="text-sm font-medium">Close</span>
+            <span className="text-xs sm:text-sm font-medium">Close</span>
           </button>
           <h2 className="text-white/90 font-semibold text-lg hidden sm:block">
             {trip?.name || "Trip Flipbook"}
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-white/60 text-sm">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-white/60 text-xs sm:text-sm">
             {isCoverPage ? "Cover" : `${currentMediaIndex + 1} of ${items.length}`}
           </span>
-          <div className="flex gap-1">
+          <div className="hidden sm:flex gap-1">
             {Array.from({ length: Math.min(totalPages, 10) }).map((_, i) => (
               <div
                 key={i}
@@ -412,16 +418,133 @@ export default function Flipbook({
 
       {/* Main Book Container */}
       <div
-        className="flex-1 flex items-center justify-center relative px-4 py-6"
+        className="flex-1 flex items-center justify-center relative px-2 sm:px-4 py-2 sm:py-6"
         style={{ touchAction: "pan-y" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        {/* Book */}
-        <div
-          className="relative w-full max-w-6xl xl:max-w-7xl max-h-[calc(100vh-220px)]"
-        >
+        {/* ========== MOBILE LAYOUT (single page, full screen) ========== */}
+        <div className="md:hidden w-full h-full flex flex-col">
+          <div
+            className={`flex-1 bg-gradient-to-b from-[#f8f5f0] to-[#fdfcfa] rounded-xl overflow-hidden shadow-xl relative
+              ${isFlipping ? "animate-fade" : ""}
+            `}
+          >
+            {isCoverPage ? (
+              /* Mobile Cover Page */
+              <div className="w-full h-full flex flex-col">
+                {/* Cover image - takes most of the space */}
+                <div
+                  className={`flex-1 relative ${coverMedia?.type === "image" ? "cursor-zoom-in" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (coverMedia?.type === "image") {
+                      openZoomedImage(coverMedia.downloadURL, trip?.name || "Cover", {
+                        name: trip?.name || "Trip",
+                        location: locationStr,
+                        dateRange: dateRange
+                      });
+                    }
+                  }}
+                >
+                  {coverMedia ? (
+                    coverMedia.type === "image" ? (
+                      <img
+                        src={coverMedia.downloadURL}
+                        alt={trip?.name || "Cover"}
+                        className="absolute inset-0 w-full h-full object-cover select-none"
+                        style={{ objectPosition: `50% ${coverPosY}%` }}
+                        draggable={false}
+                      />
+                    ) : (
+                      <video
+                        src={coverMedia.downloadURL}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        muted
+                        playsInline
+                      />
+                    )
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                      <svg className="w-20 h-20 text-primary/40" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Gradient overlay for text */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+
+                  {/* Trip info overlay */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white pointer-events-none">
+                    <h1 className="text-2xl font-bold mb-2 drop-shadow-lg">{trip?.name || "Trip"}</h1>
+                    <div className="flex items-center gap-2 mb-1 text-white/90">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm">{locationStr}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm">{dateRange}</span>
+                    </div>
+                    <p className="mt-2 text-white/60 text-xs">
+                      {items.length} {items.length === 1 ? "Photo" : "Photos"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : currentMedia ? (
+              /* Mobile Photo Page */
+              <div className="w-full h-full flex flex-col">
+                {/* Photo - fills most of the space */}
+                <div
+                  className="flex-1 flex items-center justify-center bg-slate-100 relative cursor-zoom-in min-h-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (currentMedia.type === "image") {
+                      openZoomedImage(currentMedia.downloadURL, currentMedia.caption || "");
+                    }
+                  }}
+                >
+                  {currentMedia.type === "image" ? (
+                    <img
+                      src={currentMedia.downloadURL}
+                      alt={currentMedia.caption || ""}
+                      className="max-w-full max-h-full object-contain"
+                      draggable={false}
+                    />
+                  ) : (
+                    <video
+                      src={currentMedia.downloadURL}
+                      className="max-w-full max-h-full object-contain"
+                      controls
+                      playsInline
+                    />
+                  )}
+                </div>
+                {/* Caption - visible area at bottom */}
+                {currentMedia.caption && (
+                  <div className="flex-shrink-0 bg-white/95 px-4 py-3 border-t border-slate-200">
+                    <p className="text-sm text-slate-600 text-center">
+                      {fixCaption(currentMedia.caption)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-slate-400">
+                No photos yet
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ========== DESKTOP LAYOUT (two-page book) ========== */}
+        <div className="hidden md:block relative w-full max-w-6xl xl:max-w-7xl max-h-[calc(100vh-220px)]">
           {/* Book Shadow */}
           <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-[90%] h-16 bg-black/40 blur-2xl rounded-[50%]" />
 
@@ -514,7 +637,7 @@ export default function Flipbook({
                   </div>
                   {items[currentMediaIndex - 1]?.caption && (
                     <p className="mt-2 text-xs text-slate-500 text-center italic line-clamp-2 flex-shrink-0">
-                      {items[currentMediaIndex - 1].caption}
+                      {fixCaption(items[currentMediaIndex - 1].caption)}
                     </p>
                   )}
                 </div>
@@ -668,7 +791,7 @@ export default function Flipbook({
                   </div>
                   {currentMedia.caption && (
                     <p className="mt-2 text-xs text-slate-500 text-center italic line-clamp-2 flex-shrink-0">
-                      {currentMedia.caption}
+                      {fixCaption(currentMedia.caption)}
                     </p>
                   )}
                 </div>
@@ -688,9 +811,9 @@ export default function Flipbook({
               onClick={(e) => { e.stopPropagation(); prev(); }}
               onPointerDown={(e) => e.stopPropagation()}
               disabled={isFlipping}
-              className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
+              className="absolute left-2 sm:left-4 md:left-8 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
             >
-              <svg className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
@@ -698,9 +821,9 @@ export default function Flipbook({
               onClick={(e) => { e.stopPropagation(); next(); }}
               onPointerDown={(e) => e.stopPropagation()}
               disabled={isFlipping}
-              className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
+              className="absolute right-2 sm:right-4 md:right-8 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
             >
-              <svg className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -709,10 +832,10 @@ export default function Flipbook({
       </div>
 
       {/* Footer - Page thumbnails */}
-      <div className="relative z-10 px-6 py-4 flex items-center justify-center gap-2 overflow-x-auto">
+      <div className="relative z-10 px-2 sm:px-6 py-2 sm:py-4 flex items-center justify-center gap-1.5 sm:gap-2 overflow-x-auto">
         <button
           onClick={() => goToPage(0, currentPage > 0 ? "prev" : "next")}
-          className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+          className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 transition-all ${
             currentPage === 0 ? "border-primary ring-2 ring-primary/30" : "border-white/20 hover:border-white/40"
           }`}
         >
@@ -720,17 +843,17 @@ export default function Flipbook({
             <img src={coverMedia.downloadURL} alt="Cover" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white/60" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white/60" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
               </svg>
             </div>
           )}
         </button>
-        {items.slice(0, 8).map((item, i) => (
+        {items.slice(0, 6).map((item, i) => (
           <button
             key={item.id}
             onClick={() => goToPage(i + 1, currentPage > i + 1 ? "prev" : "next")}
-            className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+            className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 transition-all ${
               currentPage === i + 1 ? "border-primary ring-2 ring-primary/30" : "border-white/20 hover:border-white/40"
             }`}
           >
@@ -738,16 +861,16 @@ export default function Flipbook({
               <img src={item.downloadURL} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-slate-700 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white/60" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white/60" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                 </svg>
               </div>
             )}
           </button>
         ))}
-        {items.length > 8 && (
-          <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center text-white/60 text-xs border border-white/20">
-            +{items.length - 8}
+        {items.length > 6 && (
+          <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-white/10 flex items-center justify-center text-white/60 text-xs border border-white/20">
+            +{items.length - 6}
           </div>
         )}
       </div>
@@ -777,11 +900,25 @@ export default function Flipbook({
             transform: rotateY(180deg);
           }
         }
+        @keyframes fade {
+          0% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+          100% {
+            opacity: 1;
+          }
+        }
         .animate-flip {
           animation: flip 0.5s ease-in-out;
         }
         .animate-flip-reverse {
           animation: flip-reverse 0.5s ease-in-out;
+        }
+        .animate-fade {
+          animation: fade 0.3s ease-in-out;
         }
       `}</style>
     </div>

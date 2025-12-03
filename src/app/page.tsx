@@ -716,14 +716,19 @@ function HomeInner() {
       for (const docSnap of tSnap.docs) {
         const t = docSnap.data() as Trip;
 
-        // Calculate distance for this trip
+        // Track last location for chained distance calculation
+        let lastCity = t.city;
+        let lastState = t.state;
+        let lastCountry = t.country;
+
+        // Calculate distance from origin to main destination
         const tripDistance = await calculateDistance(
           t.originCity,
           t.originState,
           t.originCountry,
-          t.city,
-          t.state,
-          t.country
+          lastCity,
+          lastState,
+          lastCountry
         );
         totalMiles += tripDistance;
 
@@ -750,20 +755,48 @@ function HomeInner() {
           accommodationCounts[t.accommodationType] = (accommodationCounts[t.accommodationType] || 0) + 1;
         }
 
-        // Destinations
+        // Destinations - fetch and sort by startDate for proper ordering
         const destSnap = await getDocs(
           collection(db, "trips", docSnap.id, "destinations")
         );
-        destSnap.forEach((d) => {
-          const x = d.data() as any;
-          if (x.country) cSet.add(x.country);
-          if (x.state) sSet.add(x.state);
-          if (x.city) citySet.add(`${x.city}|${x.country || ""}`);
-          // Count transportation from destinations
-          if (x.transportationType) {
-            transportCounts[x.transportationType] = (transportCounts[x.transportationType] || 0) + 1;
+        const destinations = destSnap.docs
+          .map((d) => d.data() as any)
+          .sort((a, b) => {
+            if (a.startDate && b.startDate) {
+              return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+            }
+            return 0;
+          });
+
+        // Calculate distances between consecutive destinations
+        for (const dest of destinations) {
+          // Calculate distance from last location to this destination
+          if (dest.city && dest.country) {
+            const segmentDistance = await calculateDistance(
+              lastCity,
+              lastState,
+              lastCountry,
+              dest.city,
+              dest.state,
+              dest.country
+            );
+            totalMiles += segmentDistance;
+
+            // Update last location for next iteration
+            lastCity = dest.city;
+            lastState = dest.state;
+            lastCountry = dest.country;
           }
-        });
+
+          // Track locations from destinations
+          if (dest.country) cSet.add(dest.country);
+          if (dest.state) sSet.add(dest.state);
+          if (dest.city) citySet.add(`${dest.city}|${dest.country || ""}`);
+          // Count transportation from destinations
+          if (dest.transportationType) {
+            transportCounts[dest.transportationType] = (transportCounts[dest.transportationType] || 0) + 1;
+          }
+        }
 
         // Activities subcollection
         const actSnap = await getDocs(

@@ -10,6 +10,7 @@ import {
   Footprints,
   Train,
   Truck,
+  Tent,
   Home,
   Building2,
   Hotel,
@@ -19,6 +20,8 @@ import {
   Globe,
   MapPin,
   Route,
+  Users,
+  Bed,
 } from "lucide-react";
 
 export type TravelStats = {
@@ -151,9 +154,14 @@ export default function TravelOverview({ stats }: { stats: TravelStats }) {
           <h3 className="text-lg font-semibold mb-6">Stays by Type</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <AccommodationStat
-              icon={<Home className="w-5 h-5" />}
-              count={stats.accommodationCounts["Houses"] || 0}
-              label="Houses"
+              icon={<Building2 className="w-5 h-5" />}
+              count={stats.accommodationCounts["Airbnb/VRBO"] || 0}
+              label="Airbnb/VRBO"
+            />
+            <AccommodationStat
+              icon={<Tent className="w-5 h-5" />}
+              count={stats.accommodationCounts["Camp"] || 0}
+              label="Camp"
             />
             <AccommodationStat
               icon={<Building2 className="w-5 h-5" />}
@@ -166,24 +174,34 @@ export default function TravelOverview({ stats }: { stats: TravelStats }) {
               label="Cruise"
             />
             <AccommodationStat
+              icon={<Users className="w-5 h-5" />}
+              count={stats.accommodationCounts["Friends/Family"] || 0}
+              label="Friends/Family"
+            />
+            <AccommodationStat
+              icon={<Bed className="w-5 h-5" />}
+              count={stats.accommodationCounts["Hostel"] || 0}
+              label="Hostel"
+            />
+            <AccommodationStat
               icon={<Hotel className="w-5 h-5" />}
               count={stats.accommodationCounts["Hotel"] || 0}
               label="Hotel"
             />
             <AccommodationStat
-              icon={<Truck className="w-5 h-5" />}
-              count={stats.accommodationCounts["RVs"] || 0}
-              label="RVs"
-            />
-            <AccommodationStat
-              icon={<MoreHorizontal className="w-5 h-5" />}
-              count={stats.accommodationCounts["Other"] || 0}
-              label="Other"
+              icon={<Home className="w-5 h-5" />}
+              count={stats.accommodationCounts["House"] || 0}
+              label="House"
             />
             <AccommodationStat
               icon={<Hotel className="w-5 h-5" />}
               count={stats.accommodationCounts["Resort"] || 0}
               label="Resort"
+            />
+            <AccommodationStat
+              icon={<MoreHorizontal className="w-5 h-5" />}
+              count={stats.accommodationCounts["Other"] || 0}
+              label="Other"
             />
           </div>
         </div>

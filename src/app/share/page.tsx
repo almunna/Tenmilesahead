@@ -46,6 +46,12 @@ type SimplePlace = {
   [key: string]: any;
 };
 
+/** Fix legacy captions with typos (e.g., "Activitie" → "Activity") */
+function fixCaption(caption: string | undefined | null): string {
+  if (!caption) return "";
+  return caption.replace(/\bActivitie\b/g, "Activity");
+}
+
 function fmtMDY(s?: string | number | null) {
   if (!s) return "";
   if (typeof s === "string") {
@@ -110,7 +116,7 @@ function DetailLines({ d }: { d: SimplePlace }) {
             </div>
           )}
           {d.websiteUrl && (
-            <div className="text-sm">
+            <div className="text-sm overflow-hidden">
               <span className="font-medium">Website:</span>{" "}
               <a
                 href={
@@ -120,7 +126,7 @@ function DetailLines({ d }: { d: SimplePlace }) {
                 }
                 target="_blank"
                 rel="noreferrer"
-                className="underline text-primary"
+                className="underline text-primary break-all"
               >
                 {d.websiteUrl.replace(/^https?:\/\//, "")}
               </a>
@@ -185,6 +191,227 @@ function DetailLines({ d }: { d: SimplePlace }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------- Media Gallery ----------------------------
+function MediaGallery({
+  media,
+  onOpenFlipbook,
+}: {
+  media: MediaItem[];
+  onOpenFlipbook: () => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
+
+  const displayMedia = showAll ? media : media.slice(0, 9);
+
+  // Keyboard navigation for viewer
+  useEffect(() => {
+    if (!selectedMedia) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedMedia(null);
+      if (e.key === "ArrowLeft") {
+        const idx = media.findIndex(m => m.id === selectedMedia.id);
+        const prevIdx = (idx - 1 + media.length) % media.length;
+        setSelectedMedia(media[prevIdx]);
+      }
+      if (e.key === "ArrowRight") {
+        const idx = media.findIndex(m => m.id === selectedMedia.id);
+        const nextIdx = (idx + 1) % media.length;
+        setSelectedMedia(media[nextIdx]);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedMedia, media]);
+
+  return (
+    <>
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Photos & Videos</h2>
+          <button
+            className="btn text-sm"
+            onClick={onOpenFlipbook}
+          >
+            View Flipbook
+          </button>
+        </div>
+        {/* Mobile: single column with larger images */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {displayMedia.map((item) => (
+            <div key={item.id}>
+              <div
+                className="aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden bg-surface cursor-pointer hover:opacity-80 transition"
+                onClick={() => setSelectedMedia(item)}
+                title={item.caption || ""}
+                aria-label={item.caption || "Open photo"}
+                role="button"
+              >
+                {item.type === "image" ? (
+                  <img
+                    src={item.downloadURL}
+                    alt={item.caption || ""}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <video
+                    src={item.downloadURL}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                )}
+              </div>
+
+              {/* visible caption under tile - larger on mobile */}
+              {item.caption?.trim() && (
+                <div className="mt-2 text-sm sm:text-xs text-muted-foreground line-clamp-3 sm:line-clamp-2">
+                  {fixCaption(item.caption)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {media.length > 9 && !showAll && (
+          <div className="mt-4 text-center">
+            <button
+              className="navlink text-base sm:text-sm"
+              onClick={() => setShowAll(true)}
+            >
+              View all {media.length} photos
+            </button>
+          </div>
+        )}
+        {showAll && media.length > 9 && (
+          <div className="mt-4 text-center">
+            <button
+              className="navlink text-base sm:text-sm"
+              onClick={() => setShowAll(false)}
+            >
+              Show less
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Full-screen media viewer */}
+      {selectedMedia && (
+        <div className="fixed inset-0 z-[70] bg-black/95 flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 text-white border-b border-white/10">
+            <div className="text-xs sm:text-sm truncate flex-1 mr-2">
+              <span className="text-white/60">
+                {media.findIndex(m => m.id === selectedMedia.id) + 1} of {media.length}
+              </span>
+            </div>
+            <button
+              className="rounded-lg px-3 py-1.5 bg-white/10 hover:bg-white/20 text-sm flex-shrink-0"
+              onClick={() => setSelectedMedia(null)}
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Main content */}
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Image container */}
+            <div className="flex-1 flex items-center justify-center relative overflow-hidden p-2 sm:p-4 min-h-0">
+              {selectedMedia.type === "image" ? (
+                <img
+                  src={selectedMedia.downloadURL}
+                  className="max-h-full max-w-full object-contain rounded-lg"
+                  alt={selectedMedia.caption || ""}
+                  draggable={false}
+                />
+              ) : (
+                <video
+                  src={selectedMedia.downloadURL}
+                  className="max-h-full max-w-full object-contain rounded-lg"
+                  controls
+                  autoPlay
+                  playsInline
+                />
+              )}
+
+              {/* Navigation buttons */}
+              {media.length > 1 && (
+                <>
+                  <button
+                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+                    onClick={() => {
+                      const idx = media.findIndex(m => m.id === selectedMedia.id);
+                      const prevIdx = (idx - 1 + media.length) % media.length;
+                      setSelectedMedia(media[prevIdx]);
+                    }}
+                  >
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+                    onClick={() => {
+                      const idx = media.findIndex(m => m.id === selectedMedia.id);
+                      const nextIdx = (idx + 1) % media.length;
+                      setSelectedMedia(media[nextIdx]);
+                    }}
+                  >
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Caption */}
+            {selectedMedia.caption && (
+              <div className="flex-shrink-0 px-4 py-3 bg-black/50 border-t border-white/10">
+                <p className="text-sm sm:text-base text-white/90 text-center">
+                  {fixCaption(selectedMedia.caption)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnail strip */}
+          <div className="flex-shrink-0 px-2 py-2 sm:py-3 bg-black/50 border-t border-white/10 overflow-x-auto">
+            <div className="flex items-center justify-start sm:justify-center gap-1.5 sm:gap-2">
+              {media.slice(0, 10).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedMedia(item)}
+                  className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                    selectedMedia.id === item.id ? "border-primary ring-2 ring-primary/30" : "border-white/20 hover:border-white/40"
+                  }`}
+                >
+                  {item.type === "image" ? (
+                    <img src={item.downloadURL} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-slate-700 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white/60" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+              {media.length > 10 && (
+                <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-white/10 flex items-center justify-center text-white/60 text-xs border border-white/20">
+                  +{media.length - 10}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -291,14 +518,33 @@ function SharePageContent() {
   // Itinerary rows (chronological by startDate)
   const itineraryRows = (() => {
     const rows: Array<{
-      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant";
+      kind: "Destination" | "Activity" | "Accommodation" | "Restaurant" | "Primary Destination";
       subcollection:
         | "destinations"
         | "activities"
         | "accommodations"
-        | "restaurants";
+        | "restaurants"
+        | "trip";
       data: WithId<SimplePlace>;
     }> = [];
+
+    // Add the main trip destination as the primary destination
+    if (trip) {
+      rows.push({
+        kind: "Primary Destination",
+        subcollection: "trip",
+        data: {
+          id: "trip-destination",
+          name: trip.city || trip.country,
+          city: trip.city,
+          state: trip.state || null,
+          country: trip.country,
+          address: trip.specificAddress || null,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+        },
+      });
+    }
 
     destinations.forEach((d) =>
       rows.push({ kind: "Destination", subcollection: "destinations", data: d })
@@ -398,20 +644,19 @@ function SharePageContent() {
         {/* Subscribe Banner */}
         {!bannerDismissed && (
           <div className="bg-gradient-to-r from-primary/90 to-primary/70 text-white">
-            <div className="container py-4 flex items-center justify-between gap-4">
+            <div className="container py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex-1">
-                <div className="font-semibold">
+                <div className="font-semibold text-sm sm:text-base">
                   Love this? Create your own trip journal!
                 </div>
-                <p className="text-sm text-white/90 mt-1">
-                  Join Ten Miles Ahead to document your adventures, upload
-                  photos, and share with the world.
+                <p className="text-xs sm:text-sm text-white/90 mt-1">
+                  Join Ten Miles Ahead to document your adventures.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
                 <Link
                   href="/subscribe"
-                  className="btn bg-white text-primary hover:bg-white/90"
+                  className="btn bg-white text-primary hover:bg-white/90 text-sm flex-1 sm:flex-initial text-center"
                 >
                   Get Started
                 </Link>
@@ -503,63 +748,83 @@ function SharePageContent() {
 
             {/* Media Grid */}
             {media.length > 0 && (
-              <div className="card">
-                <h2 className="text-xl font-semibold mb-4">Photos & Videos</h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {media.slice(0, 9).map((item) => (
-                    <div key={item.id}>
-                      <div
-                        className="aspect-square rounded-xl overflow-hidden bg-surface cursor-pointer hover:opacity-80 transition"
-                        onClick={() => setFlipbookOpen(true)}
-                        title={item.caption || ""}
-                        aria-label={item.caption || "Open photo"}
-                        role="button"
-                      >
-                        {item.type === "image" ? (
-                          <img
-                            src={item.downloadURL}
-                            alt={item.caption || ""}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : (
-                          <video
-                            src={item.downloadURL}
-                            className="w-full h-full object-cover"
-                            muted
-                            playsInline
-                            preload="metadata"
-                          />
-                        )}
-                      </div>
-
-                      {/* visible caption under tile */}
-                      {item.caption?.trim() && (
-                        <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
-                          {item.caption}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {media.length > 9 && (
-                  <div className="mt-4 text-center">
-                    <button
-                      className="navlink"
-                      onClick={() => setFlipbookOpen(true)}
-                    >
-                      View all {media.length} photos
-                    </button>
-                  </div>
-                )}
-              </div>
+              <MediaGallery
+                media={media}
+                onOpenFlipbook={() => setFlipbookOpen(true)}
+              />
             )}
 
             {/* Itinerary (chronological) */}
             <div className="card">
               <h2 className="text-xl font-semibold mb-3">Itinerary</h2>
-              <div className="rounded-xl border border-border overflow-hidden">
+
+              {/* Mobile: Card layout */}
+              <div className="md:hidden space-y-3">
+                {itineraryRows.map((row, i) => {
+                  const d = row.data;
+                  const loc = [d.address, d.city, d.state, d.country]
+                    .filter(Boolean)
+                    .join(", ");
+                  const k = keyFor(row.subcollection, d.id);
+                  const canShowDetails = hasAnyDetails(d);
+                  const isOpen = !!openDetails[k];
+                  return (
+                    <div key={`mobile-${row.subcollection}-${d.id}-${i}`} className="rounded-xl border border-border p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                          {row.kind}
+                        </span>
+                        {d.price != null && (
+                          <span className="text-sm font-medium">
+                            {d.price} {d.priceUnit || ""}
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-semibold text-base mb-1">{d.name || "—"}</div>
+                      <div className="text-sm text-muted-foreground mb-1">
+                        {fmtMDY(d.startDate)}
+                        {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                      </div>
+                      {loc && (
+                        <div className="text-sm text-muted-foreground mb-3">{loc}</div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        {row.subcollection !== "trip" && (
+                          <button
+                            className="text-sm navlink"
+                            onClick={() =>
+                              setSelectedItem({
+                                id: d.id!,
+                                name: d.name,
+                                subcollection: row.subcollection as "destinations" | "activities" | "accommodations" | "restaurants",
+                              })
+                            }
+                          >
+                            View Photos
+                          </button>
+                        )}
+                        {canShowDetails && (
+                          <button
+                            className="text-sm navlink"
+                            onClick={() => toggleDetails(k)}
+                          >
+                            {isOpen ? "Hide Details" : "See Details"}
+                          </button>
+                        )}
+                      </div>
+                      {canShowDetails && isOpen && <DetailLines d={d} />}
+                    </div>
+                  );
+                })}
+                {itineraryRows.length === 0 && (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No entries yet.
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop: Table layout */}
+              <div className="hidden md:block rounded-xl border border-border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-surface">
                     <tr>
@@ -598,25 +863,31 @@ function SharePageContent() {
                                 : "—"}
                             </td>
                             <td className="px-3 py-2">
-                              <button
-                                className="text-xs navlink"
-                                onClick={() =>
-                                  setSelectedItem({
-                                    id: d.id!,
-                                    name: d.name,
-                                    subcollection: row.subcollection,
-                                  })
-                                }
-                              >
-                                View Photos
-                              </button>
-                              {canShowDetails && (
-                                <button
-                                  className="text-xs navlink ml-3"
-                                  onClick={() => toggleDetails(k)}
-                                >
-                                  {isOpen ? "Hide Details" : "See Details"}
-                                </button>
+                              {row.subcollection !== "trip" ? (
+                                <>
+                                  <button
+                                    className="text-xs navlink"
+                                    onClick={() =>
+                                      setSelectedItem({
+                                        id: d.id!,
+                                        name: d.name,
+                                        subcollection: row.subcollection as "destinations" | "activities" | "accommodations" | "restaurants",
+                                      })
+                                    }
+                                  >
+                                    View Photos
+                                  </button>
+                                  {canShowDetails && (
+                                    <button
+                                      className="text-xs navlink ml-3"
+                                      onClick={() => toggleDetails(k)}
+                                    >
+                                      {isOpen ? "Hide Details" : "See Details"}
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </td>
                           </tr>
@@ -960,62 +1231,113 @@ function ItemFlipbook({
   }, [items.length, onClose]);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/90 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 text-white">
-        <div className="text-sm">
-          {itemName} — {items.length} item{items.length === 1 ? "" : "s"}
+    <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 text-white border-b border-white/10">
+        <div className="text-xs sm:text-sm truncate flex-1 mr-2">
+          <span className="font-medium">{itemName}</span>
+          <span className="text-white/60 ml-2">
+            {items.length > 0 ? `${index + 1} of ${items.length}` : "No photos"}
+          </span>
         </div>
         <button
-          className="rounded-lg px-3 py-1 bg-white/10 hover:bg-white/20"
+          className="rounded-lg px-3 py-1.5 bg-white/10 hover:bg-white/20 text-sm flex-shrink-0"
           onClick={onClose}
         >
           Close
         </button>
       </div>
 
-      <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-h-0">
         {items.length === 0 ? (
-          <div className="text-white/80">No media for this item yet</div>
-        ) : (
-          <div className="w-full h-full max-w-5xl flex items-center justify-center">
-            {items[index].type === "image" ? (
-              <img
-                src={items[index].downloadURL}
-                className="max-h-[80vh] max-w-full rounded-xl"
-                alt={items[index].caption || ""}
-                draggable={false}
-              />
-            ) : (
-              <video
-                src={items[index].downloadURL}
-                className="max-h-[80vh] max-w-full rounded-xl"
-                controls
-              />
-            )}
+          <div className="flex-1 flex items-center justify-center text-white/80">
+            No media for this item yet
           </div>
-        )}
-
-        {items.length > 1 && (
+        ) : (
           <>
-            <button
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2"
-              onClick={prev}
-            >
-              ◀
-            </button>
-            <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full px-4 py-2"
-              onClick={next}
-            >
-              ▶
-            </button>
+            {/* Image container - takes available space */}
+            <div className="flex-1 flex items-center justify-center relative overflow-hidden p-2 sm:p-4 min-h-0">
+              {items[index].type === "image" ? (
+                <img
+                  src={items[index].downloadURL}
+                  className="max-h-full max-w-full object-contain rounded-lg"
+                  alt={items[index].caption || ""}
+                  draggable={false}
+                />
+              ) : (
+                <video
+                  src={items[index].downloadURL}
+                  className="max-h-full max-w-full object-contain rounded-lg"
+                  controls
+                  playsInline
+                />
+              )}
+
+              {/* Navigation buttons */}
+              {items.length > 1 && (
+                <>
+                  <button
+                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+                    onClick={prev}
+                  >
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center backdrop-blur-sm"
+                    onClick={next}
+                  >
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Caption - always visible at bottom */}
+            {items[index].caption && (
+              <div className="flex-shrink-0 px-4 py-3 bg-black/50 border-t border-white/10">
+                <p className="text-sm sm:text-base text-white/90 text-center">
+                  {fixCaption(items[index].caption)}
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>
 
-      {items.length > 0 && (
-        <div className="px-4 py-3 text-center text-white/80 text-sm">
-          {items[index].caption || ""}
+      {/* Thumbnail strip for multiple images */}
+      {items.length > 1 && (
+        <div className="flex-shrink-0 px-2 py-2 sm:py-3 bg-black/50 border-t border-white/10 overflow-x-auto">
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+            {items.slice(0, 8).map((item, i) => (
+              <button
+                key={item.id}
+                onClick={() => setIndex(i)}
+                className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                  index === i ? "border-primary ring-2 ring-primary/30" : "border-white/20 hover:border-white/40"
+                }`}
+              >
+                {item.type === "image" ? (
+                  <img src={item.downloadURL} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-slate-700 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white/60" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            ))}
+            {items.length > 8 && (
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-white/10 flex items-center justify-center text-white/60 text-xs border border-white/20">
+                +{items.length - 8}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

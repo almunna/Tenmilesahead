@@ -744,7 +744,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
               key: "transportationType",
               label: "Mode of Transportation",
               options: [
-                "Airplanes",
+                "Airplane",
                 "Bus",
                 "Car",
                 "Cruise",
@@ -776,7 +776,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
               key: "transportationType",
               label: "Mode of Transportation",
               options: [
-                "Airplanes",
+                "Airplane",
                 "Bus",
                 "Car",
                 "Cruise",

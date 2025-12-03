@@ -38,7 +38,7 @@ const sortAZWithOtherLast = (
 
 /** Duplicated so nothing else in the app needs to change */
 const TRANSPORT_OPTIONS = [
-  "Airplanes",
+  "Airplane",
   "Bus",
   "Car",
   "Cruise",

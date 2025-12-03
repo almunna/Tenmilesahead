@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { collection, getDocs, query, orderBy, where, doc, getDoc, deleteDoc, updateDoc, addDoc, setDoc } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -27,6 +27,7 @@ type ReviewWithMedia = Review & {
   organization?: number;
   funFactor?: number;
   ownerUsername?: string; // Journal name of the owner
+  coverPositionY?: number; // Cover photo vertical position (0-100%)
   // Cruise-specific fields
   cruiseLine?: string;
   shipName?: string;
@@ -245,7 +246,7 @@ function GlobalReviewsInner() {
           funFactor: 0,
         },
         notes: data.review || data.notes || null,
-        coverMediaId: mediaItems[0]?.id || null,
+        coverMediaId: data.coverMediaId || mediaItems[0]?.id || null,
         mediaIds: mediaItems.map((m) => m.id || ""),
         visitDate: data.startDate || null,
         createdAt: data.createdAt || Date.now(),
@@ -258,6 +259,7 @@ function GlobalReviewsInner() {
         safety: data.locationRating || 0,
         organization: 0,
         funFactor: 0,
+        coverPositionY: data.coverPositionY ?? 50,
         // Cruise-specific fields
         cruiseLine: data.cruiseLine || undefined,
         shipName: data.shipName || undefined,
@@ -293,6 +295,11 @@ function GlobalReviewsInner() {
         const existing = grouped.get(key)!;
         existing.reviews.push(review);
       } else {
+        // Find the cover media using coverMediaId, fallback to first media item
+        const coverMedia = review.coverMediaId
+          ? review.mediaItems.find(m => m.id === review.coverMediaId)
+          : review.mediaItems[0];
+
         grouped.set(key, {
           placeName: review.placeName,
           city: review.city,
@@ -300,7 +307,7 @@ function GlobalReviewsInner() {
           country: review.country,
           type: review.type,
           reviews: [review],
-          coverMediaUrl: review.mediaItems[0]?.downloadURL,
+          coverMediaUrl: coverMedia?.downloadURL,
           averageRating: review.ratings.overall,
           // Cruise-specific fields
           cruiseLine: review.cruiseLine,
@@ -431,6 +438,8 @@ function GlobalReviewsInner() {
         valueRating: updatedReview.ratings.value,
         serviceRating: updatedReview.ratings.service,
         locationRating: updatedReview.ratings.safety,
+        coverMediaId: updatedReview.coverMediaId || null,
+        coverPositionY: updatedReview.coverPositionY ?? 50,
         updatedAt: Date.now(),
       });
 
@@ -809,9 +818,10 @@ function ReviewCard({
         <div className="w-full h-48 sm:w-32 sm:h-32 flex-shrink-0 bg-[#2c3e50] relative">
           {review.mediaItems.length > 0 ? (
             <img
-              src={review.mediaItems[0].downloadURL}
+              src={(review.coverMediaId ? review.mediaItems.find(m => m.id === review.coverMediaId)?.downloadURL : null) || review.mediaItems[0].downloadURL}
               alt={review.placeName}
               className="w-full h-full object-cover"
+              style={{ objectPosition: `50% ${review.coverPositionY ?? 50}%` }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -1168,8 +1178,30 @@ function EditReviewModal({
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [coverMediaId, setCoverMediaId] = useState<string | null>(review.coverMediaId || (review.mediaItems[0]?.id || null));
   const [newCoverKey, setNewCoverKey] = useState<string | null>(null);
+  const [coverPosY, setCoverPosY] = useState<number>(review.coverPositionY ?? 50);
+  const draggingRef = useRef(false);
 
   const fileKey = (f: File) => `${f.name}__${f.size}__${f.lastModified}`;
+
+  // Cover photo drag handlers
+  function onCoverPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    draggingRef.current = true;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    onCoverPointerMove(e);
+  }
+  function onCoverPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+  }
+  function onCoverPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current) return;
+    const box = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const y = e.clientY - box.top;
+    const pct = Math.max(0, Math.min(100, (y / box.height) * 100));
+    setCoverPosY(pct);
+  }
 
   // Generate previews for new files
   useEffect(() => {
@@ -1283,10 +1315,11 @@ function EditReviewModal({
         }
       }
 
-      // Update the review with new cover
+      // Update the review with new cover and position
       const updatedReview = {
         ...editedReview,
         coverMediaId: finalCoverMediaId,
+        coverPositionY: coverPosY,
       };
 
       await onSave(updatedReview);
@@ -1403,6 +1436,45 @@ function EditReviewModal({
           {/* Photos Section */}
           <div className="space-y-4">
             <h3 className="text-base sm:text-lg font-semibold text-white">Photos</h3>
+
+            {/* Cover Photo Preview with Drag to Reposition */}
+            {(() => {
+              const coverMedia = coverMediaId
+                ? existingMedia.find(m => m.id === coverMediaId)
+                : newCoverKey
+                ? null // new file selected as cover
+                : existingMedia[0];
+              const coverUrl = coverMedia?.downloadURL || (newCoverKey ? previews[newCoverKey] : null);
+
+              if (!coverUrl) return null;
+
+              return (
+                <div>
+                  <h4 className="text-sm font-medium text-white/80 mb-2">Cover Photo Preview</h4>
+                  <div className="text-xs text-white/50 mb-2">Drag to reposition the cover photo</div>
+                  <div
+                    className="relative w-full h-32 rounded-lg overflow-hidden bg-[#2c3e50] cursor-grab active:cursor-grabbing"
+                    style={{ touchAction: 'none' }}
+                    onPointerDown={onCoverPointerDown}
+                    onPointerMove={onCoverPointerMove}
+                    onPointerUp={onCoverPointerUp}
+                  >
+                    <img
+                      src={coverUrl}
+                      alt="Cover preview"
+                      className="w-full h-full object-cover pointer-events-none select-none"
+                      style={{ objectPosition: `50% ${coverPosY}%` }}
+                      draggable={false}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="bg-black/30 px-3 py-1 rounded-full text-xs text-white/80">
+                        ↕ Drag to adjust
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Photo Upload */}
             <div

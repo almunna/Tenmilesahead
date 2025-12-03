@@ -33,6 +33,16 @@ import {
 import type { Trip, MediaItem } from "@/lib/types";
 import { COUNTRIES, getStates } from "@/lib/geo";
 
+/* --------------------------------- Helpers --------------------------------- */
+
+// Properly singularize title names (Activities → Activity, Destinations → Destination, etc.)
+function singularize(title: string): string {
+  if (title === "Activities") return "Activity";
+  if (title.endsWith("ies")) return title.slice(0, -3) + "y";
+  if (title.endsWith("s")) return title.slice(0, -1);
+  return title;
+}
+
 /* --------------------------------- Types --------------------------------- */
 
 type WithId<T> = T & { id: string };
@@ -1039,7 +1049,7 @@ function ActivityModal({
           key: "transportationType",
           label: "Mode of Transportation",
           options: [
-            "Airplanes",
+            "Airplane",
             "Bus",
             "Car",
             "Cruise",
@@ -1195,7 +1205,7 @@ function PlaceModal({
         storagePath: path,
         downloadURL: url,
         createdAt: Date.now(),
-        caption: `${title.slice(0, -1)} • ${form.name}`, // simple context caption
+        caption: `${singularize(title)} • ${form.name}`, // simple context caption
         linkedSubcollection: subcollection,
         linkedId: rowRef.id,
       } as any);

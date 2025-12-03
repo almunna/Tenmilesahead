@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ModalShell from "./ModalShell";
 import ItemFlipbook from "./ItemFlipbook";
@@ -38,6 +38,27 @@ export default function ItineraryModal({
     (async () => {
       const rows: Array<{ kind: string; subcollection: string; data: any }> =
         [];
+
+      // Fetch the main trip to add as primary destination
+      const tripDoc = await getDoc(doc(db, "trips", tripId));
+      if (tripDoc.exists()) {
+        const trip = tripDoc.data();
+        rows.push({
+          kind: "Primary Destination",
+          subcollection: "trip",
+          data: {
+            id: "trip-destination",
+            name: trip.city || trip.country,
+            city: trip.city,
+            state: trip.state || null,
+            country: trip.country,
+            address: trip.specificAddress || null,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+          },
+        });
+      }
+
       const dest = await getDocs(
         collection(db, "trips", tripId, "destinations")
       );
@@ -122,18 +143,22 @@ export default function ItineraryModal({
                         .join(", ") || "—"}
                     </td>
                     <td className="px-3 py-2">
-                      <button
-                        className="text-xs navlink"
-                        onClick={() =>
-                          setSelectedItem({
-                            id: d.id,
-                            name: d.name,
-                            subcollection: row.subcollection,
-                          })
-                        }
-                      >
-                        View Photos
-                      </button>
+                      {row.subcollection !== "trip" ? (
+                        <button
+                          className="text-xs navlink"
+                          onClick={() =>
+                            setSelectedItem({
+                              id: d.id,
+                              name: d.name,
+                              subcollection: row.subcollection,
+                            })
+                          }
+                        >
+                          View Photos
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                   </tr>
                 );
