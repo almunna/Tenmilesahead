@@ -108,8 +108,8 @@ export default function TravelOverview({ stats }: { stats: TravelStats }) {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <TransportStat
               icon={<Plane className="w-5 h-5" />}
-              count={stats.transportationCounts["Airplanes"] || 0}
-              label="Airplanes"
+              count={stats.transportationCounts["Airplane"] || 0}
+              label="Airplane"
             />
             <TransportStat
               icon={<Bus className="w-5 h-5" />}

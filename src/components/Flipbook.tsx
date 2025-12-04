@@ -239,7 +239,9 @@ export default function Flipbook({
   const dragging = useRef(false);
   const startX = useRef(0);
   const deltaX = useRef(0);
-  const SWIPE_THRESHOLD = 60;
+  const deltaY = useRef(0);
+  const swipeDirection = useRef<"horizontal" | "vertical" | null>(null);
+  const SWIPE_THRESHOLD = 50;
 
   // Cover position from trip document (read-only in flipbook)
   const [coverPosY, setCoverPosY] = useState<number>(50);
@@ -317,10 +319,65 @@ export default function Flipbook({
   // Track if this was a swipe or a tap (for mobile)
   const wasSwipe = useRef(false);
   const startY = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Pointer handlers for swipe - works on mobile and desktop
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (zoomedImage) return;
+  // Touch handlers for swipe - better control on mobile
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (zoomedImage || isFlipping) return;
+    const touch = e.touches[0];
+    dragging.current = true;
+    startX.current = touch.clientX;
+    startY.current = touch.clientY;
+    deltaX.current = 0;
+    deltaY.current = 0;
+    swipeDirection.current = null;
+    wasSwipe.current = false;
+  };
+
+  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!dragging.current || zoomedImage || isFlipping) return;
+    const touch = e.touches[0];
+    deltaX.current = touch.clientX - startX.current;
+    deltaY.current = touch.clientY - startY.current;
+
+    // Determine swipe direction on first significant movement
+    if (swipeDirection.current === null) {
+      const absX = Math.abs(deltaX.current);
+      const absY = Math.abs(deltaY.current);
+      if (absX > 10 || absY > 10) {
+        swipeDirection.current = absX > absY ? "horizontal" : "vertical";
+      }
+    }
+
+    // If horizontal swipe, prevent vertical scroll
+    if (swipeDirection.current === "horizontal") {
+      e.preventDefault();
+      wasSwipe.current = true;
+    }
+  };
+
+  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!dragging.current || zoomedImage || isFlipping) return;
+    dragging.current = false;
+
+    // Only trigger navigation for horizontal swipes
+    if (swipeDirection.current === "horizontal") {
+      const dx = deltaX.current;
+      if (dx <= -SWIPE_THRESHOLD && items.length > 0) {
+        next();
+      } else if (dx >= SWIPE_THRESHOLD && items.length > 0) {
+        prev();
+      }
+    }
+
+    deltaX.current = 0;
+    deltaY.current = 0;
+    swipeDirection.current = null;
+  };
+
+  // Mouse handlers for desktop
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (zoomedImage || isFlipping) return;
     dragging.current = true;
     startX.current = e.clientX;
     startY.current = e.clientY;
@@ -328,18 +385,17 @@ export default function Flipbook({
     wasSwipe.current = false;
   };
 
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current || zoomedImage) return;
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragging.current || zoomedImage || isFlipping) return;
     deltaX.current = e.clientX - startX.current;
-    const deltaY = Math.abs(e.clientY - startY.current);
-    // Mark as swipe if horizontal movement is significant
-    if (Math.abs(deltaX.current) > 10 && Math.abs(deltaX.current) > deltaY) {
+    const dy = Math.abs(e.clientY - startY.current);
+    if (Math.abs(deltaX.current) > 10 && Math.abs(deltaX.current) > dy) {
       wasSwipe.current = true;
     }
   };
 
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current || zoomedImage) return;
+  const onMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragging.current || zoomedImage || isFlipping) return;
     dragging.current = false;
 
     const dx = deltaX.current;
@@ -437,11 +493,16 @@ export default function Flipbook({
 
       {/* Main Book Container */}
       <div
+        ref={containerRef}
         className="flex-1 flex items-center justify-center relative px-2 sm:px-4 py-2 sm:py-6"
-        style={{ touchAction: "pan-y pinch-zoom" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        style={{ touchAction: "none" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={() => { dragging.current = false; }}
       >
         {/* ========== MOBILE LAYOUT (single page, full screen) ========== */}
         <div className="md:hidden w-full h-full flex flex-col">
@@ -454,18 +515,7 @@ export default function Flipbook({
               /* Mobile Cover Page */
               <div className="w-full h-full flex flex-col">
                 {/* Cover image - takes most of the space */}
-                <div
-                  className={`flex-1 relative ${coverMedia?.type === "image" ? "cursor-zoom-in" : ""}`}
-                  onClick={(e) => {
-                    if (coverMedia?.type === "image") {
-                      handleImageTap(e, coverMedia.downloadURL, trip?.name || "Cover", {
-                        name: trip?.name || "Trip",
-                        location: locationStr,
-                        dateRange: dateRange
-                      });
-                    }
-                  }}
-                >
+                <div className="flex-1 relative">
                   {coverMedia ? (
                     coverMedia.type === "image" ? (
                       <img
@@ -519,14 +569,7 @@ export default function Flipbook({
               /* Mobile Photo Page */
               <div className="w-full h-full flex flex-col">
                 {/* Photo - fills most of the space */}
-                <div
-                  className="flex-1 flex items-center justify-center bg-slate-100 relative cursor-zoom-in min-h-0"
-                  onClick={(e) => {
-                    if (currentMedia.type === "image") {
-                      handleImageTap(e, currentMedia.downloadURL, currentMedia.caption || "");
-                    }
-                  }}
-                >
+                <div className="flex-1 flex items-center justify-center bg-slate-100 relative min-h-0">
                   {currentMedia.type === "image" ? (
                     <img
                       src={currentMedia.downloadURL}
@@ -826,22 +869,30 @@ export default function Flipbook({
           <>
             <button
               onClick={(e) => { e.stopPropagation(); prev(); }}
-              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
               disabled={isFlipping}
-              className="absolute left-2 sm:left-4 md:left-8 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
+              className="absolute left-1 sm:left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/20 active:bg-white/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
+              style={{ touchAction: "manipulation" }}
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg className="w-6 h-6 sm:w-6 sm:h-6 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); next(); }}
-              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
               disabled={isFlipping}
-              className="absolute right-2 sm:right-4 md:right-8 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all hover:scale-110 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
+              className="absolute right-1 sm:right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/20 active:bg-white/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white flex items-center justify-center transition-all hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 z-30 group"
+              style={{ touchAction: "manipulation" }}
             >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg className="w-6 h-6 sm:w-6 sm:h-6 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </>
@@ -896,7 +947,7 @@ export default function Flipbook({
       {!isCoverPage && currentMedia?.type === "image" && (
         <div className="text-center pb-2 text-white/40 text-xs">
           <span className="hidden sm:inline">Click on photo to zoom and view full quality</span>
-          <span className="sm:hidden">Swipe to navigate • Tap to zoom</span>
+          <span className="sm:hidden">Swipe to navigate</span>
         </div>
       )}
 

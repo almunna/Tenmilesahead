@@ -1016,7 +1016,7 @@ function DestinationModal({
           key: "transportationType",
           label: "Mode of Transportation",
           options: [
-            "Airplanes",
+            "Airplane",
             "Bus",
             "Car",
             "Cruise",

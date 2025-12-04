@@ -134,8 +134,14 @@ export default function ItineraryModal({
                     <td className="px-3 py-2">{row.kind}</td>
                     <td className="px-3 py-2">{d.name || "—"}</td>
                     <td className="px-3 py-2">
-                      {fmtMDY(d.startDate)}
-                      {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                      {d.startDate ? (
+                        <>
+                          {fmtMDY(d.startDate)}
+                          {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                        </>
+                      ) : (
+                        ""
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {[d.address, d.city, d.state, d.country]

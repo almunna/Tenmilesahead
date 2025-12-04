@@ -435,6 +435,7 @@ function TripInner() {
   // cover position state (percent, 0–100; default 50 = center)
   const [coverPosY, setCoverPosY] = useState<number>(50);
   const draggingRef = useRef(false);
+  const [mobileDragEnabled, setMobileDragEnabled] = useState(false);
 
   // uploader visibility & auto-hide after upload completes
   const [showUploader, setShowUploader] = useState(true);
@@ -594,6 +595,10 @@ function TripInner() {
 
   // cover dragging handlers
   function onCoverPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    // On touch devices, only allow drag if mobileDragEnabled is true
+    const isTouchEvent = e.pointerType === "touch";
+    if (isTouchEvent && !mobileDragEnabled) return;
+
     draggingRef.current = true;
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
     onCoverPointerMove(e);
@@ -601,6 +606,7 @@ function TripInner() {
   async function onCoverPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (!draggingRef.current) return;
     draggingRef.current = false;
+    setMobileDragEnabled(false);
     (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
     if (trip?.id) {
       await updateDoc(doc(db, "trips", trip.id), {
@@ -781,8 +787,8 @@ function TripInner() {
               coverMedia.type === "image" ? (
                 <div
                   key={trip?.coverMediaId}
-                  className="relative w-full"
-                  style={{ height: "360px", cursor: "grab" }}
+                  className={`relative w-full ${mobileDragEnabled ? "cursor-grab" : "md:cursor-grab"}`}
+                  style={{ height: "360px" }}
                   title="Drag to reposition"
                   onPointerDown={onCoverPointerDown}
                   onPointerMove={onCoverPointerMove}
@@ -798,6 +804,34 @@ function TripInner() {
                     decoding="async"
                     draggable={false}
                   />
+                  {/* Mobile move button */}
+                  <button
+                    type="button"
+                    className={`absolute top-2 left-2 md:hidden p-2 rounded-full transition-colors z-10 ${
+                      mobileDragEnabled
+                        ? "bg-blue-500 text-white"
+                        : "bg-black/50 text-white/80"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMobileDragEnabled(!mobileDragEnabled);
+                    }}
+                    title={mobileDragEnabled ? "Done moving" : "Move cover photo"}
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                      />
+                    </svg>
+                  </button>
                 </div>
               ) : (
                 <video

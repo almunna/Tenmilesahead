@@ -111,13 +111,14 @@ export default function WorldMap({
         }
       }
 
-      // SECOND: Add destination markers (red pins) for trips that have city coordinates
+      // SECOND: Add destination markers (red pins) for trips that have country
       for (const trip of trips) {
-        // Skip trips without city for marker placement (but country already collected above)
-        if (!trip.city || !trip.country) {
+        // Skip trips without country for marker placement
+        if (!trip.country) {
           continue;
         }
 
+        // Try to get coordinates - the API will fallback to state/country if city is wrong
         const coordinates = await getCoordinates(trip.specificAddress, trip.city, trip.state, trip.country);
 
         if (coordinates && map.current) {
@@ -461,19 +462,6 @@ export default function WorldMap({
             if (countriesToShade.has(geoCountryLower)) {
               console.log('Direct match found:', geoCountryLower);
               return true;
-            }
-
-            // Check against mapping - both directions
-            for (const toShade of countriesToShade) {
-              // Partial matching for longer names
-              if (toShade.length > 4 && geoCountryLower.includes(toShade)) {
-                console.log('Partial match found:', toShade, 'in', geoCountryLower);
-                return true;
-              }
-              if (geoCountryLower.length > 4 && toShade.includes(geoCountryLower)) {
-                console.log('Partial match found:', geoCountryLower, 'in', toShade);
-                return true;
-              }
             }
 
             // Also check if the GeoJSON name maps to any country we should shade

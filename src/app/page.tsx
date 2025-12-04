@@ -697,6 +697,49 @@ function HomeInner() {
     accommodationCounts: {} as Record<string, number>,
   });
 
+  // Track subcollection changes to trigger stats recomputation
+  const [statsVersion, setStatsVersion] = useState(0);
+
+  // Set up real-time listeners for all trip subcollections
+  useEffect(() => {
+    if (!user || trips.length === 0) return;
+
+    const unsubscribers: (() => void)[] = [];
+
+    // Listen to each trip's subcollections
+    for (const trip of trips) {
+      // Destinations
+      unsubscribers.push(
+        onSnapshot(collection(db, "trips", trip.id, "destinations"), () => {
+          setStatsVersion((v) => v + 1);
+        })
+      );
+      // Activities
+      unsubscribers.push(
+        onSnapshot(collection(db, "trips", trip.id, "activities"), () => {
+          setStatsVersion((v) => v + 1);
+        })
+      );
+      // Accommodations
+      unsubscribers.push(
+        onSnapshot(collection(db, "trips", trip.id, "accommodations"), () => {
+          setStatsVersion((v) => v + 1);
+        })
+      );
+      // Media
+      unsubscribers.push(
+        onSnapshot(collection(db, "trips", trip.id, "media"), () => {
+          setStatsVersion((v) => v + 1);
+        })
+      );
+    }
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [user, trips]);
+
+  // Compute stats when trips or subcollections change
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -740,20 +783,21 @@ function HomeInner() {
           totalDays += days;
         }
 
-        // Track locations
+        // Track locations (only destination locations, not origin)
         if (t.country) cSet.add(t.country);
-        if (t.state) sSet.add(t.state);
+        // Only count US states for the "States Visited (US)" stat
+        const isUSA = t.country && ['united states', 'usa', 'us', 'united states of america'].includes(t.country.toLowerCase().trim());
+        if (t.state && t.state.trim() && isUSA) sSet.add(t.state.trim());
         if (t.city) citySet.add(`${t.city}|${t.country || ""}`);
 
-        // Track transportation
-        if (t.transportationType) {
-          transportCounts[t.transportationType] = (transportCounts[t.transportationType] || 0) + 1;
+        // Track transportation from main trip (originTransportationType is used for the trip's primary transport)
+        if (t.originTransportationType) {
+          transportCounts[t.originTransportationType] = (transportCounts[t.originTransportationType] || 0) + 1;
         }
 
-        // Track accommodation
-        if (t.accommodationType) {
-          accommodationCounts[t.accommodationType] = (accommodationCounts[t.accommodationType] || 0) + 1;
-        }
+        // Note: Main trip's accommodationType is not counted here
+        // Accommodations are only counted from the accommodations subcollection
+        // to avoid double-counting
 
         // Destinations - fetch and sort by startDate for proper ordering
         const destSnap = await getDocs(
@@ -790,7 +834,9 @@ function HomeInner() {
 
           // Track locations from destinations
           if (dest.country) cSet.add(dest.country);
-          if (dest.state) sSet.add(dest.state);
+          // Only count US states for the "States Visited (US)" stat
+          const destIsUSA = dest.country && ['united states', 'usa', 'us', 'united states of america'].includes(dest.country.toLowerCase().trim());
+          if (dest.state && dest.state.trim() && destIsUSA) sSet.add(dest.state.trim());
           if (dest.city) citySet.add(`${dest.city}|${dest.country || ""}`);
           // Count transportation from destinations
           if (dest.transportationType) {
@@ -847,7 +893,7 @@ function HomeInner() {
         accommodationCounts: accommodationCounts,
       });
     })();
-  }, [user, trips.length]);
+  }, [user, trips.length, statsVersion]);
 
   // Flipbook modal control
   const [flipTripId, setFlipTripId] = useState<string | null>(null);

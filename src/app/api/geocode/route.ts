@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
     // Rate limit
     await waitForRateLimit();
 
+    // If city equals country (e.g., "Anguilla, Anguilla"), just use country
+    const effectiveCity = city && country && city.toLowerCase().trim() === country.toLowerCase().trim() ? null : city;
+
     // Build structured query URL for better accuracy
     // Using structured query parameters instead of free-form q= to avoid ambiguity
     const structuredParams = new URLSearchParams();
@@ -57,11 +60,15 @@ export async function GET(request: NextRequest) {
     structuredParams.set('addressdetails', '1');
 
     // Use structured query when we have specific components
-    if (city && country) {
-      structuredParams.set('city', city);
+    if (effectiveCity && country) {
+      structuredParams.set('city', effectiveCity);
       if (state) structuredParams.set('state', state);
       structuredParams.set('country', country);
       if (address) structuredParams.set('street', address);
+    } else if (country) {
+      // Just search for state + country or just country
+      const fallbackQuery = [state, country].filter(Boolean).join(', ');
+      structuredParams.set('q', fallbackQuery);
     } else {
       // Fallback to free-form query
       structuredParams.set('q', queryString);
@@ -85,55 +92,93 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     if (data && data.length > 0) {
-      // If we have a state, try to find a result that matches the state
-      let bestMatch = data[0];
-      if (state && data.length > 1) {
-        const stateLower = state.toLowerCase();
-        // Common US state abbreviations mapping
-        const stateAbbreviations: { [key: string]: string } = {
-          'al': 'alabama', 'ak': 'alaska', 'az': 'arizona', 'ar': 'arkansas',
-          'ca': 'california', 'co': 'colorado', 'ct': 'connecticut', 'de': 'delaware',
-          'fl': 'florida', 'ga': 'georgia', 'hi': 'hawaii', 'id': 'idaho',
-          'il': 'illinois', 'in': 'indiana', 'ia': 'iowa', 'ks': 'kansas',
-          'ky': 'kentucky', 'la': 'louisiana', 'me': 'maine', 'md': 'maryland',
-          'ma': 'massachusetts', 'mi': 'michigan', 'mn': 'minnesota', 'ms': 'mississippi',
-          'mo': 'missouri', 'mt': 'montana', 'ne': 'nebraska', 'nv': 'nevada',
-          'nh': 'new hampshire', 'nj': 'new jersey', 'nm': 'new mexico', 'ny': 'new york',
-          'nc': 'north carolina', 'nd': 'north dakota', 'oh': 'ohio', 'ok': 'oklahoma',
-          'or': 'oregon', 'pa': 'pennsylvania', 'ri': 'rhode island', 'sc': 'south carolina',
-          'sd': 'south dakota', 'tn': 'tennessee', 'tx': 'texas', 'ut': 'utah',
-          'vt': 'vermont', 'va': 'virginia', 'wa': 'washington', 'wv': 'west virginia',
-          'wi': 'wisconsin', 'wy': 'wyoming', 'dc': 'district of columbia'
-        };
+      // Common US state abbreviations mapping
+      const stateAbbreviations: { [key: string]: string } = {
+        'al': 'alabama', 'ak': 'alaska', 'az': 'arizona', 'ar': 'arkansas',
+        'ca': 'california', 'co': 'colorado', 'ct': 'connecticut', 'de': 'delaware',
+        'fl': 'florida', 'ga': 'georgia', 'hi': 'hawaii', 'id': 'idaho',
+        'il': 'illinois', 'in': 'indiana', 'ia': 'iowa', 'ks': 'kansas',
+        'ky': 'kentucky', 'la': 'louisiana', 'me': 'maine', 'md': 'maryland',
+        'ma': 'massachusetts', 'mi': 'michigan', 'mn': 'minnesota', 'ms': 'mississippi',
+        'mo': 'missouri', 'mt': 'montana', 'ne': 'nebraska', 'nv': 'nevada',
+        'nh': 'new hampshire', 'nj': 'new jersey', 'nm': 'new mexico', 'ny': 'new york',
+        'nc': 'north carolina', 'nd': 'north dakota', 'oh': 'ohio', 'ok': 'oklahoma',
+        'or': 'oregon', 'pa': 'pennsylvania', 'ri': 'rhode island', 'sc': 'south carolina',
+        'sd': 'south dakota', 'tn': 'tennessee', 'tx': 'texas', 'ut': 'utah',
+        'vt': 'vermont', 'va': 'virginia', 'wa': 'washington', 'wv': 'west virginia',
+        'wi': 'wisconsin', 'wy': 'wyoming', 'dc': 'district of columbia'
+      };
 
-        // Expand abbreviation if needed
-        const stateExpanded = stateAbbreviations[stateLower] || stateLower;
+      // Country name variations for matching
+      const countryAliases: { [key: string]: string[] } = {
+        'united states': ['usa', 'us', 'united states of america'],
+        'united kingdom': ['uk', 'great britain', 'england', 'scotland', 'wales'],
+        'anguilla': ['anguilla'],
+      };
 
-        for (const result of data) {
-          const addressDetails = result.address || {};
-          const resultState = (addressDetails.state || '').toLowerCase();
-          const resultStateCode = (addressDetails['ISO3166-2-lvl4'] || '').toLowerCase().replace('us-', '');
+      // First, filter results to only those matching the expected country
+      let filteredResults = data;
+      if (country) {
+        const countryLower = country.toLowerCase().trim();
+        const countryVariants = [countryLower, ...(countryAliases[countryLower] || [])];
 
-          // Check if the result matches our expected state
-          if (resultState.includes(stateExpanded) ||
-              stateExpanded.includes(resultState) ||
-              resultStateCode === stateLower ||
-              stateAbbreviations[resultStateCode] === stateExpanded) {
-            bestMatch = result;
-            break;
+        // Also add reverse lookup - if user entered "usa", match "united states"
+        for (const [key, aliases] of Object.entries(countryAliases)) {
+          if (aliases.includes(countryLower)) {
+            countryVariants.push(key);
           }
         }
+
+        filteredResults = data.filter((result: any) => {
+          const addressDetails = result.address || {};
+          const resultCountry = (addressDetails.country || '').toLowerCase().trim();
+
+          // Check if result country matches any of our variants
+          return countryVariants.some(variant =>
+            resultCountry.includes(variant) || variant.includes(resultCountry)
+          );
+        });
       }
 
-      const coords: [number, number] = [
-        parseFloat(bestMatch.lon),
-        parseFloat(bestMatch.lat),
-      ];
-      geocodeCache.set(cacheKey, coords);
-      return NextResponse.json({ coordinates: coords });
+      // If no results match the country, the city might be wrong - return null to trigger fallback
+      if (filteredResults.length === 0) {
+        // Don't cache as null yet - let the fallbacks handle it
+        console.log(`No results in expected country ${country} for query`);
+      } else {
+        // Find best match from filtered results
+        let bestMatch = filteredResults[0];
+
+        // If we have a state, try to find a result that matches the state
+        if (state && filteredResults.length > 1) {
+          const stateLower = state.toLowerCase();
+          const stateExpanded = stateAbbreviations[stateLower] || stateLower;
+
+          for (const result of filteredResults) {
+            const addressDetails = result.address || {};
+            const resultState = (addressDetails.state || '').toLowerCase();
+            const resultStateCode = (addressDetails['ISO3166-2-lvl4'] || '').toLowerCase().replace('us-', '');
+
+            // Check if the result matches our expected state
+            if (resultState.includes(stateExpanded) ||
+                stateExpanded.includes(resultState) ||
+                resultStateCode === stateLower ||
+                stateAbbreviations[resultStateCode] === stateExpanded) {
+              bestMatch = result;
+              break;
+            }
+          }
+        }
+
+        const coords: [number, number] = [
+          parseFloat(bestMatch.lon),
+          parseFloat(bestMatch.lat),
+        ];
+        geocodeCache.set(cacheKey, coords);
+        return NextResponse.json({ coordinates: coords });
+      }
     }
 
-    // If full address didn't work, try without the street address
+    // Fallback 1: If full address didn't work, try without the street address (city + state + country)
     if (address && city) {
       const fallbackParts = [city, state, country].filter(Boolean);
       const fallbackQuery = encodeURIComponent(fallbackParts.join(', '));
@@ -163,6 +208,80 @@ export async function GET(request: NextRequest) {
           ];
           geocodeCache.set(fallbackCacheKey, coords);
           geocodeCache.set(cacheKey, coords); // Also cache original key
+          return NextResponse.json({ coordinates: coords });
+        }
+      }
+    }
+
+    // Fallback 2: If city didn't work, try state + country only
+    if (city && (state || country)) {
+      const fallbackParts2 = [state, country].filter(Boolean);
+      const fallbackQuery2 = encodeURIComponent(fallbackParts2.join(', '));
+      const fallbackCacheKey2 = fallbackParts2.join(', ').toLowerCase();
+
+      if (geocodeCache.has(fallbackCacheKey2)) {
+        const coords = geocodeCache.get(fallbackCacheKey2);
+        if (coords) {
+          geocodeCache.set(cacheKey, coords);
+          return NextResponse.json({ coordinates: coords });
+        }
+      }
+
+      await waitForRateLimit();
+      const fallbackResponse2 = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${fallbackQuery2}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'TenMilesAhead-TravelApp/1.0',
+          },
+        }
+      );
+
+      if (fallbackResponse2.ok) {
+        const fallbackData2 = await fallbackResponse2.json();
+        if (fallbackData2 && fallbackData2.length > 0) {
+          const coords: [number, number] = [
+            parseFloat(fallbackData2[0].lon),
+            parseFloat(fallbackData2[0].lat),
+          ];
+          geocodeCache.set(fallbackCacheKey2, coords);
+          geocodeCache.set(cacheKey, coords);
+          return NextResponse.json({ coordinates: coords });
+        }
+      }
+    }
+
+    // Fallback 3: If state + country didn't work, try just country
+    if (country && (city || state)) {
+      const fallbackCacheKey3 = country.toLowerCase();
+
+      if (geocodeCache.has(fallbackCacheKey3)) {
+        const coords = geocodeCache.get(fallbackCacheKey3);
+        if (coords) {
+          geocodeCache.set(cacheKey, coords);
+          return NextResponse.json({ coordinates: coords });
+        }
+      }
+
+      await waitForRateLimit();
+      const fallbackResponse3 = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(country)}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'TenMilesAhead-TravelApp/1.0',
+          },
+        }
+      );
+
+      if (fallbackResponse3.ok) {
+        const fallbackData3 = await fallbackResponse3.json();
+        if (fallbackData3 && fallbackData3.length > 0) {
+          const coords: [number, number] = [
+            parseFloat(fallbackData3[0].lon),
+            parseFloat(fallbackData3[0].lat),
+          ];
+          geocodeCache.set(fallbackCacheKey3, coords);
+          geocodeCache.set(cacheKey, coords);
           return NextResponse.json({ coordinates: coords });
         }
       }

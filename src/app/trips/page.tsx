@@ -1294,14 +1294,14 @@ function TripCard({
           </div>
         </div>
 
-        {/* Navigation arrows (show on hover when multiple media) */}
+        {/* Navigation arrows (show on hover when multiple media, hidden on mobile) */}
         {allMedia.length > 1 && (
           <>
             {currentIndex > 0 && (
               <button
                 type="button"
                 onClick={goToPrevious}
-                className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
                 aria-label="Previous image"
               >
                 ←
@@ -1311,7 +1311,7 @@ function TripCard({
               <button
                 type="button"
                 onClick={goToNext}
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
                 aria-label="Next image"
               >
                 →

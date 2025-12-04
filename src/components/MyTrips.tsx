@@ -142,6 +142,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
   const [restaurantsOpen, setRestaurantsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [mobileDragEnabled, setMobileDragEnabled] = useState(false);
 
   // --- Cover focus (drag to reposition) ---
   const [coverFocus, setCoverFocus] = useState<{ x: number; y: number }>(() => {
@@ -196,6 +197,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
   async function endDrag() {
     if (!draggingRef.current) return;
     draggingRef.current = false;
+    setMobileDragEnabled(false);
     document.body.style.userSelect = "";
     document.body.style.cursor = "";
     // persist to Firestore
@@ -367,9 +369,10 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
           {/* Drag overlay (only when there is a media) */}
           {(cover?.type === "image" || cover?.type === "video") && (
             <div
-              className="absolute inset-0 cursor-grab"
+              className={`absolute inset-0 ${mobileDragEnabled ? "cursor-grab" : "md:cursor-grab"}`}
               onMouseDown={(e) => startDrag(e.clientX, e.clientY)}
               onTouchStart={(e) => {
+                if (!mobileDragEnabled) return;
                 const t = e.touches[0];
                 if (t) startDrag(t.clientX, t.clientY);
               }}
@@ -378,6 +381,37 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
                 if (draggingRef.current) e.preventDefault();
               }}
             />
+          )}
+
+          {/* Mobile move button - only show on touch devices when there's media */}
+          {(cover?.type === "image" || cover?.type === "video") && (
+            <button
+              type="button"
+              className={`absolute top-2 left-2 md:hidden p-2 rounded-full transition-colors z-10 ${
+                mobileDragEnabled
+                  ? "bg-blue-500 text-white"
+                  : "bg-black/50 text-white/80"
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileDragEnabled(!mobileDragEnabled);
+              }}
+              title={mobileDragEnabled ? "Done moving" : "Move cover photo"}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                />
+              </svg>
+            </button>
           )}
 
           {/* Dark gradient overlay at bottom */}
@@ -409,14 +443,14 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
             </div>
           </div>
 
-          {/* Navigation arrows (show on hover when multiple media) */}
+          {/* Navigation arrows (show on hover when multiple media, hidden on mobile) */}
           {allMedia.length > 1 && (
             <>
               {currentIndex > 0 && (
                 <button
                   type="button"
                   onClick={goToPrevious}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
                   aria-label="Previous image"
                 >
                   ←
@@ -426,7 +460,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
                 <button
                   type="button"
                   onClick={goToNext}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10"
                   aria-label="Next image"
                 >
                   →
@@ -720,7 +754,7 @@ function TripTile({ trip }: { trip: WithId<Trip> }) {
               key: "transportationType",
               label: "Mode of Transportation",
               options: [
-                "Airplanes",
+                "Airplane",
                 "Bus",
                 "Car",
                 "Cruise",

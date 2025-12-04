@@ -120,60 +120,113 @@ function GlobalReviewsInner() {
   // Add review modal state
   const [addingReviewForPlace, setAddingReviewForPlace] = useState<{ placeName: string; city: string; country: string; type: ReviewType } | null>(null);
 
-  // Load all reviews
+  // Store all trip docs for progressive loading
+  const [tripDocs, setTripDocs] = useState<{ id: string; ownerId: string }[]>([]);
+  const [loadedTripCount, setLoadedTripCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const TRIPS_PER_BATCH = 5; // Load reviews from 5 trips at a time
+
+  // Load trips first, then load first batch of reviews
   useEffect(() => {
-    loadReviews();
+    loadTrips();
   }, []);
 
+  const loadTrips = async () => {
+    try {
+      setLoading(true);
+      const tripsSnapshot = await getDocs(collection(db, "trips"));
+      const trips = tripsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ownerId: doc.data().ownerId || "",
+      }));
+      setTripDocs(trips);
+
+      // Load first batch of reviews
+      if (trips.length > 0) {
+        await loadReviewsFromTrips(trips.slice(0, TRIPS_PER_BATCH), []);
+        setLoadedTripCount(Math.min(TRIPS_PER_BATCH, trips.length));
+      }
+    } catch (error) {
+      console.error("Error loading trips:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadReviewsFromTrips = async (
+    trips: { id: string; ownerId: string }[],
+    existingReviews: ReviewWithMedia[]
+  ) => {
+    const reviewPromises: Promise<ReviewWithMedia[]>[] = [];
+
+    for (const trip of trips) {
+      // Fetch destinations
+      reviewPromises.push(
+        fetchReviewsFromSubcollection(trip.id, "destinations", "Destinations", trip.ownerId)
+      );
+
+      // Fetch activities
+      reviewPromises.push(
+        fetchReviewsFromSubcollection(trip.id, "activities", "Activities", trip.ownerId)
+      );
+
+      // Fetch accommodations
+      reviewPromises.push(
+        fetchReviewsFromSubcollection(trip.id, "accommodations", "Accommodations", trip.ownerId)
+      );
+
+      // Fetch restaurants
+      reviewPromises.push(
+        fetchReviewsFromSubcollection(trip.id, "restaurants", "Restaurants", trip.ownerId)
+      );
+
+      // Fetch cruises
+      reviewPromises.push(
+        fetchReviewsFromSubcollection(trip.id, "cruises", "Cruises", trip.ownerId)
+      );
+    }
+
+    const results = await Promise.all(reviewPromises);
+    const newReviews = results.flat();
+    const allLoadedReviews = [...existingReviews, ...newReviews];
+
+    setAllReviews(allLoadedReviews);
+    groupReviewsByPlace(allLoadedReviews);
+  };
+
+  const loadMoreTrips = async () => {
+    if (loadingMore || loadedTripCount >= tripDocs.length) return;
+
+    setLoadingMore(true);
+    try {
+      const nextBatch = tripDocs.slice(loadedTripCount, loadedTripCount + TRIPS_PER_BATCH);
+      await loadReviewsFromTrips(nextBatch, allReviews);
+      setLoadedTripCount((prev) => Math.min(prev + TRIPS_PER_BATCH, tripDocs.length));
+    } catch (error) {
+      console.error("Error loading more reviews:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Full reload function (used after edit/delete)
   const loadReviews = async () => {
     try {
       setLoading(true);
+      setAllReviews([]);
+      setLoadedTripCount(0);
 
-      // Get all reviews from Activities, Accommodations, and Restaurants subcollections
-      const reviewPromises: Promise<ReviewWithMedia[]>[] = [];
-
-      // Get all trips first
       const tripsSnapshot = await getDocs(collection(db, "trips"));
+      const trips = tripsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ownerId: doc.data().ownerId || "",
+      }));
+      setTripDocs(trips);
 
-      // Cache trip owners for ownership checks
-      const tripOwners = new Map<string, string>();
-
-      for (const tripDoc of tripsSnapshot.docs) {
-        const tripId = tripDoc.id;
-        const tripData = tripDoc.data();
-        tripOwners.set(tripId, tripData.ownerId || "");
-
-        // Fetch destinations
-        reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "destinations", "Destinations", tripOwners.get(tripId))
-        );
-
-        // Fetch activities
-        reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "activities", "Activities", tripOwners.get(tripId))
-        );
-
-        // Fetch accommodations
-        reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "accommodations", "Accommodations", tripOwners.get(tripId))
-        );
-
-        // Fetch restaurants
-        reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "restaurants", "Restaurants", tripOwners.get(tripId))
-        );
-
-        // Fetch cruises
-        reviewPromises.push(
-          fetchReviewsFromSubcollection(tripId, "cruises", "Cruises", tripOwners.get(tripId))
-        );
+      if (trips.length > 0) {
+        await loadReviewsFromTrips(trips.slice(0, TRIPS_PER_BATCH), []);
+        setLoadedTripCount(Math.min(TRIPS_PER_BATCH, trips.length));
       }
-
-      const results = await Promise.all(reviewPromises);
-      const flatReviews = results.flat();
-
-      setAllReviews(flatReviews);
-      groupReviewsByPlace(flatReviews);
     } catch (error) {
       console.error("Error loading reviews:", error);
     } finally {
@@ -681,7 +734,14 @@ function GlobalReviewsInner() {
           </div>
 
           <p className="text-sm text-white/70 mt-2">
-            Reviews are listed in chronological order.
+            {allReviews.length > 0 ? (
+              <>
+                Showing {Math.min(visibleCount, allFilteredReviewCards.length)} of {allFilteredReviewCards.length} reviews
+                {loadedTripCount < tripDocs.length && ` (more available)`}
+              </>
+            ) : (
+              "Reviews are listed in chronological order."
+            )}
           </p>
         </div>
       </div>
@@ -714,14 +774,31 @@ function GlobalReviewsInner() {
               ))}
             </div>
 
-            {/* See More Button */}
-            {hasMore && (
+            {/* Load More Button - single button that handles both showing more and loading from DB */}
+            {(hasMore || loadedTripCount < tripDocs.length) && (
               <div className="flex justify-center mt-8">
                 <button
-                  onClick={() => setVisibleCount((prev) => prev + 5)}
-                  className="px-6 py-3 bg-[#66bfcc] text-white rounded-lg hover:bg-[#5aa8b5] transition-colors font-medium"
+                  onClick={async () => {
+                    // If we have more loaded reviews to show, just show them
+                    if (hasMore) {
+                      setVisibleCount((prev) => prev + 10);
+                    }
+                    // If we're running low on loaded reviews, fetch more from database
+                    if (visibleCount + 10 >= allFilteredReviewCards.length && loadedTripCount < tripDocs.length) {
+                      await loadMoreTrips();
+                    }
+                  }}
+                  disabled={loadingMore}
+                  className="px-6 py-3 bg-[#66bfcc] text-white rounded-lg hover:bg-[#5aa8b5] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  See More ({allFilteredReviewCards.length - visibleCount} remaining)
+                  {loadingMore ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent"></span>
+                      Loading...
+                    </span>
+                  ) : (
+                    "Load More"
+                  )}
                 </button>
               </div>
             )}
