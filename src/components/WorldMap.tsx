@@ -2,7 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Trip } from "@/lib/types";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import "leaflet/dist/leaflet.css";
+
+// Type for destination from subcollection
+type Destination = {
+  id: string;
+  tripId: string;
+  tripName: string;
+  name?: string;
+  city: string;
+  state?: string;
+  country: string;
+  specificAddress?: string;
+};
 
 type WithId<T> = T & { id: string };
 
@@ -17,8 +31,10 @@ export default function WorldMap({
   const map = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const markersByTripId = useRef<Map<string, any>>(new Map());
+  const markersByDestId = useRef<Map<string, any>>(new Map());
   const countryLayersRef = useRef<any[]>([]);
   const [isClient, setIsClient] = useState(false);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
 
   // Set client-side flag
   useEffect(() => {
@@ -56,9 +72,9 @@ export default function WorldMap({
         maxBoundsViscosity: 1.0, // Rigid vertical bounds
       }).setView([20, 0], calculatedMinZoom);
 
-      // Add CartoDB Voyager tiles (free, English labels worldwide!)
-      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
+      // Add Carto Positron tiles (detailed map with English labels worldwide)
+      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 20,
         minZoom: calculatedMinZoom,
         keepBuffer: 4, // Keep extra tiles loaded around the visible area
         updateWhenIdle: false, // Update tiles while panning
@@ -84,6 +100,7 @@ export default function WorldMap({
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
     markersByTripId.current.clear();
+    markersByDestId.current.clear();
 
     // Remove existing country layers
     countryLayersRef.current.forEach((layer) => layer.remove());
@@ -103,15 +120,74 @@ export default function WorldMap({
       const L = await import("leaflet");
       const validCoordinates: any[] = [];
 
-      // FIRST: Collect all visited countries from trips (only requires country field)
+      // Collect all visited countries from trips AND their destinations
       const visitedCountries = new Set<string>();
+
+      // Collect all destinations from subcollections
+      const allDestinations: Destination[] = [];
+
+      // FIRST: Collect countries and destinations from all trips
       for (const trip of trips) {
+        // Add main trip country
         if (trip.country) {
           visitedCountries.add(trip.country.toLowerCase().trim());
         }
+
+        // Fetch destinations subcollection for this trip
+        try {
+          const destSnap = await getDocs(collection(db, "trips", trip.id, "destinations"));
+          destSnap.forEach((doc) => {
+            const data = doc.data();
+            if (data.country) {
+              visitedCountries.add(data.country.toLowerCase().trim());
+              allDestinations.push({
+                id: doc.id,
+                tripId: trip.id,
+                tripName: trip.name,
+                name: data.name,
+                city: data.city || "",
+                state: data.state,
+                country: data.country,
+                specificAddress: data.specificAddress,
+              });
+            }
+          });
+        } catch (error) {
+          console.error("Error fetching destinations for trip", trip.id, error);
+        }
       }
 
-      // SECOND: Add destination markers (red pins) for trips that have country
+      // Create custom red pin icon for primary destinations
+      const primaryIcon = L.default.divIcon({
+        html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
+            fill="#DC2626"
+            stroke="#991B1B"
+            stroke-width="2"/>
+          <circle cx="16" cy="16" r="6" fill="white"/>
+        </svg>`,
+        className: "custom-leaflet-marker",
+        iconSize: [24, 32],
+        iconAnchor: [12, 32],
+        popupAnchor: [0, -32],
+      });
+
+      // Create custom red pin icon for additional destinations (same as primary)
+      const destinationIcon = L.default.divIcon({
+        html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
+            fill="#DC2626"
+            stroke="#991B1B"
+            stroke-width="2"/>
+          <circle cx="16" cy="16" r="6" fill="white"/>
+        </svg>`,
+        className: "custom-leaflet-marker",
+        iconSize: [24, 32],
+        iconAnchor: [12, 32],
+        popupAnchor: [0, -32],
+      });
+
+      // SECOND: Add markers for primary trip destinations (red pins)
       for (const trip of trips) {
         // Skip trips without country for marker placement
         if (!trip.country) {
@@ -122,24 +198,9 @@ export default function WorldMap({
         const coordinates = await getCoordinates(trip.specificAddress, trip.city, trip.state, trip.country);
 
         if (coordinates && map.current) {
-          // Create custom red pin icon
-          const customIcon = L.default.divIcon({
-            html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
-                fill="#DC2626"
-                stroke="#991B1B"
-                stroke-width="2"/>
-              <circle cx="16" cy="16" r="6" fill="white"/>
-            </svg>`,
-            className: "custom-leaflet-marker",
-            iconSize: [24, 32],
-            iconAnchor: [12, 32],
-            popupAnchor: [0, -32],
-          });
-
           // Create marker
           const marker = L.default.marker([coordinates[1], coordinates[0]], {
-            icon: customIcon,
+            icon: primaryIcon,
           });
 
           // Create popup
@@ -175,6 +236,57 @@ export default function WorldMap({
           validCoordinates.push([coordinates[1], coordinates[0]]);
         }
       }
+
+      // THIRD: Add markers for additional destinations from subcollections (blue pins)
+      for (const dest of allDestinations) {
+        if (!dest.country) continue;
+
+        const coordinates = await getCoordinates(dest.specificAddress, dest.city, dest.state, dest.country);
+
+        if (coordinates && map.current) {
+          const marker = L.default.marker([coordinates[1], coordinates[0]], {
+            icon: destinationIcon,
+          });
+
+          const locationStr = [dest.city, dest.state, dest.country].filter(Boolean).join(", ");
+          const popupContent = `
+            <div style="padding: 8px; min-width: 200px;">
+              <strong style="font-size: 14px;">${dest.name || locationStr}</strong><br/>
+              <span style="color: #666; font-size: 12px;">
+                ${locationStr}
+              </span><br/>
+              <span style="color: #888; font-size: 11px;">
+                Part of: ${dest.tripName}
+              </span><br/>
+              <button
+                onclick="window.openTripFlipbook('${dest.tripId}')"
+                style="
+                  margin-top: 8px;
+                  padding: 6px 12px;
+                  background: #66bfcc;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                  font-size: 12px;
+                "
+              >
+                View Flipbook
+              </button>
+            </div>
+          `;
+
+          marker.bindPopup(popupContent);
+          marker.addTo(map.current);
+          markersRef.current.push(marker);
+          markersByDestId.current.set(dest.id, marker);
+
+          validCoordinates.push([coordinates[1], coordinates[0]]);
+        }
+      }
+
+      // Store destinations in state for the sidebar
+      setDestinations(allDestinations);
 
       // Highlight visited countries
       if (visitedCountries.size > 0 && map.current) {
@@ -513,9 +625,23 @@ export default function WorldMap({
     addMarkersAsync();
   }, [trips, onOpenFlip, isClient]);
 
-  // Function to pan to a marker and open its popup
+  // Function to pan to a trip marker and open its popup
   const handlePinClick = (tripId: string) => {
     const marker = markersByTripId.current.get(tripId);
+    if (marker && map.current) {
+      // Pan to marker location
+      map.current.setView(marker.getLatLng(), 10, {
+        animate: true,
+        duration: 0.5,
+      });
+      // Open popup
+      marker.openPopup();
+    }
+  };
+
+  // Function to pan to a destination marker and open its popup
+  const handleDestPinClick = (destId: string) => {
+    const marker = markersByDestId.current.get(destId);
     if (marker && map.current) {
       // Pan to marker location
       map.current.setView(marker.getLatLng(), 10, {
@@ -542,8 +668,9 @@ export default function WorldMap({
         />
 
         <div className="rounded-xl border border-border p-3">
-          <div className="text-sm font-semibold mb-2">Trip Pins</div>
+          <div className="text-sm font-semibold mb-2">All Pins</div>
           <ul className="max-h-[300px] sm:max-h-[450px] md:max-h-[650px] lg:max-h-[700px] overflow-auto text-sm space-y-1">
+            {/* Primary trip destinations (red pins) */}
             {trips.map((t) => {
               const fullLocation = [t.city, t.state, t.country].filter(Boolean).join(", ") || "—";
               return (
@@ -556,7 +683,7 @@ export default function WorldMap({
                     className="flex-1 truncate text-left hover:text-[#66bfcc] transition-colors"
                     title={`${t.name}\n${fullLocation}`}
                   >
-                    <span className="mr-2">📍</span>
+                    <span className="mr-2 text-red-500">📍</span>
                     {fullLocation}
                   </button>
                   <button
@@ -568,7 +695,32 @@ export default function WorldMap({
                 </li>
               );
             })}
-            {trips.length === 0 && (
+            {/* Additional destinations from subcollections (red pins) */}
+            {destinations.map((d) => {
+              const fullLocation = [d.city, d.state, d.country].filter(Boolean).join(", ") || "—";
+              return (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <button
+                    onClick={() => handleDestPinClick(d.id)}
+                    className="flex-1 truncate text-left hover:text-[#66bfcc] transition-colors"
+                    title={`${d.name || fullLocation}\nPart of: ${d.tripName}`}
+                  >
+                    <span className="mr-2 text-red-500">📍</span>
+                    {fullLocation}
+                  </button>
+                  <button
+                    className="navlink text-xs flex-shrink-0"
+                    onClick={() => onOpenFlip(d.tripId)}
+                  >
+                    View Flipbook
+                  </button>
+                </li>
+              );
+            })}
+            {trips.length === 0 && destinations.length === 0 && (
               <li className="text-muted-foreground">No trips yet.</li>
             )}
           </ul>

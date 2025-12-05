@@ -451,7 +451,7 @@ function TripsInner() {
         {/* Skeleton / placeholder while trips subscription is deferred or loading */}
         {!shouldLoadTrips || !tripsLoaded ? (
           <div
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
             aria-busy="true"
           >
             {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -472,7 +472,7 @@ function TripsInner() {
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {trips.map((t) => (
               <TripCard
                 key={t.id}
@@ -1271,13 +1271,13 @@ function TripCard({
         {/* Dark gradient overlay at bottom */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none"></div>
 
-        {/* Trip info overlay on image - only title and location */}
+        {/* Trip info overlay on image - only title and dates */}
         <div className="absolute bottom-0 left-0 right-0 p-4 text-white pointer-events-none">
           <h3 className="text-lg font-semibold mb-1 line-clamp-1">
             {trip.name}
           </h3>
 
-          {/* Location */}
+          {/* Dates */}
           <div className="flex items-start gap-1.5">
             <svg
               className="w-4 h-4 mt-0.5 flex-shrink-0"
@@ -1286,11 +1286,11 @@ function TripCard({
             >
               <path
                 fillRule="evenodd"
-                d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
                 clipRule="evenodd"
               />
             </svg>
-            <span className="text-sm">{locationOf(trip)}</span>
+            <span className="text-sm">{dateRangeOf(trip)}</span>
           </div>
         </div>
 
@@ -1337,22 +1337,6 @@ function TripCard({
 
                 {/* Content below image */}
       <div className="p-4 space-y-3">
-        {/* Date with calendar icon */}
-        <div className="flex items-center gap-2 text-white/80">
-          <svg
-            className="w-4 h-4 flex-shrink-0"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <span className="text-sm">{dateRangeOf(trip)}</span>
-        </div>
-
         {/* Origin to Destination */}
         {trip.originCity && (
           <div className="flex items-center gap-2 text-white/80">
