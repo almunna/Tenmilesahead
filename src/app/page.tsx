@@ -726,6 +726,12 @@ function HomeInner() {
           setStatsVersion((v) => v + 1);
         })
       );
+      // Restaurants
+      unsubscribers.push(
+        onSnapshot(collection(db, "trips", trip.id, "restaurants"), () => {
+          setStatsVersion((v) => v + 1);
+        })
+      );
       // Media
       unsubscribers.push(
         onSnapshot(collection(db, "trips", trip.id, "media"), () => {
@@ -868,6 +874,18 @@ function HomeInner() {
           // Count transportation from accommodations
           if (acc.transportationType) {
             transportCounts[acc.transportationType] = (transportCounts[acc.transportationType] || 0) + 1;
+          }
+        });
+
+        // Restaurants subcollection
+        const restaurantSnap = await getDocs(
+          collection(db, "trips", docSnap.id, "restaurants")
+        );
+        restaurantSnap.forEach((r) => {
+          const rest = r.data() as any;
+          // Count transportation from restaurants
+          if (rest.transportationType) {
+            transportCounts[rest.transportationType] = (transportCounts[rest.transportationType] || 0) + 1;
           }
         });
 

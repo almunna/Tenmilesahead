@@ -112,7 +112,9 @@ export default function ItineraryModal({
         <div className="text-sm text-muted-foreground mb-3">
           Click any entry to view its details and photos in a flipbook.
         </div>
-        <div className="rounded-xl border border-border overflow-hidden">
+
+        {/* Desktop table view - hidden on mobile */}
+        <div className="hidden md:block rounded-xl border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-surface">
               <tr>
@@ -181,6 +183,65 @@ export default function ItineraryModal({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card view - shown only on mobile */}
+        <div className="md:hidden space-y-3">
+          {items.length === 0 ? (
+            <div className="rounded-xl border border-border p-4 text-center text-sm text-muted-foreground">
+              No entries yet.
+            </div>
+          ) : (
+            items.map((row, i) => {
+              const d = row.data;
+              return (
+                <div
+                  key={i}
+                  className="rounded-xl border border-border p-3 bg-surface/50 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-primary mb-1">
+                        {row.kind}
+                      </div>
+                      <div className="font-semibold text-sm truncate">
+                        {d.name || "—"}
+                      </div>
+                    </div>
+                    {row.subcollection !== "trip" && (
+                      <button
+                        className="text-xs navlink flex-shrink-0"
+                        onClick={() =>
+                          setSelectedItem({
+                            id: d.id,
+                            name: d.name,
+                            subcollection: row.subcollection,
+                          })
+                        }
+                      >
+                        View
+                      </button>
+                    )}
+                  </div>
+
+                  {d.startDate && (
+                    <div className="text-xs text-muted-foreground">
+                      {fmtMDY(d.startDate)}
+                      {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                    </div>
+                  )}
+
+                  {[d.address, d.city, d.state, d.country].filter(Boolean).length > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {[d.address, d.city, d.state, d.country]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </ModalShell>
 

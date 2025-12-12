@@ -32,6 +32,7 @@ import {
 } from "firebase/storage";
 import type { Trip, MediaItem } from "@/lib/types";
 import { COUNTRIES, getStates } from "@/lib/geo";
+import { getPhotoTakenAt } from "@/lib/utils";
 
 /* --------------------------------- Helpers --------------------------------- */
 
@@ -754,12 +755,16 @@ function PhotosModal({
         await uploadBytes(sref, f);
         const url = await getDownloadURL(sref);
 
+        // Extract EXIF date for proper chronological ordering
+        const takenAt = await getPhotoTakenAt(f);
+
         await setDoc(mediaRef, {
           tripId,
           type: kind,
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
+          takenAt,
           caption: captions[k] || "",
           fileName: f.name,
           size: f.size,
@@ -1199,12 +1204,16 @@ function PlaceModal({
       await uploadBytes(storageRef(storage, path), f);
       const url = await getDownloadURL(storageRef(storage, path));
 
+      // Extract EXIF date for proper chronological ordering
+      const takenAt = await getPhotoTakenAt(f);
+
       await setDoc(mediaRef, {
         tripId,
         type: f.type.startsWith("video/") ? "video" : "image",
         storagePath: path,
         downloadURL: url,
         createdAt: Date.now(),
+        takenAt,
         caption: `${singularize(title)} • ${form.name}`, // simple context caption
         linkedSubcollection: subcollection,
         linkedId: rowRef.id,

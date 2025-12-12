@@ -19,6 +19,7 @@ import {
 } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
 import { COUNTRIES, getStates } from "@/lib/geo";
+import { getPhotoTakenAt } from "@/lib/utils";
 import ItemFlipbook from "./ItemFlipbook";
 
 // Properly singularize title names (Activities → Activity, Destinations → Destination, etc.)
@@ -233,12 +234,16 @@ export default function PlaceModal({
         await uploadBytes(storageRef(storage, path), f);
         const url = await getDownloadURL(storageRef(storage, path));
 
+        // Extract EXIF date for proper chronological ordering
+        const takenAt = await getPhotoTakenAt(f);
+
         await setDoc(mediaRef, {
           tripId,
           type: f.type.startsWith("video/") ? "video" : "image",
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
+          takenAt,
           caption: `${singularize(title)} • ${form.name}`,
           linkedSubcollection: subcollection,
           linkedId: editingId,
@@ -266,12 +271,16 @@ export default function PlaceModal({
         await uploadBytes(storageRef(storage, path), f);
         const url = await getDownloadURL(storageRef(storage, path));
 
+        // Extract EXIF date for proper chronological ordering
+        const takenAt = await getPhotoTakenAt(f);
+
         await setDoc(mediaRef, {
           tripId,
           type: f.type.startsWith("video/") ? "video" : "image",
           storagePath: path,
           downloadURL: url,
           createdAt: Date.now(),
+          takenAt,
           caption: `${singularize(title)} • ${form.name}`,
           linkedSubcollection: subcollection,
           linkedId: rowRef.id,

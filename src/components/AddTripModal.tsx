@@ -339,6 +339,7 @@ export default function AddTripModal({
           storagePath,
           downloadURL,
           createdAt: Date.now(),
+          takenAt: file.lastModified,
           caption: captions[k] || "",
           fileName: file.name,
           size: file.size,

@@ -47,6 +47,7 @@ export default function Uploader({ ownerId, tripId }: { ownerId: string; tripId:
         downloadURL: url,
         caption: "",
         createdAt: Date.now(),
+        takenAt: file.lastModified,
       };
       await addDoc(collection(db, "trips", tripId, "media"), media);
       setUploads((prev) => prev.map(u => u.id === id ? { ...u, status: "done", progress: 100 } : u));

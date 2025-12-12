@@ -330,6 +330,7 @@ export default function EditTripModal({
           downloadURL: url,
           caption: newCaptions[k] || "",
           createdAt: Date.now(),
+          takenAt: file.lastModified,
           fileName: file.name,
           size: file.size,
           contentType: file.type,

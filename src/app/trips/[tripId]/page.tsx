@@ -623,19 +623,20 @@ function TripInner() {
     setCoverPosY(pct);
   }
 
-  // cover first, then latest-first
+  // chronological order (oldest first) - cover is already shown in hero section
   const sortedMedia = useMemo(() => {
-    const coverId = trip?.coverMediaId;
     const arr = media.slice();
+    // Sort chronologically by takenAt (if available) or createdAt
+    // Use document ID as tiebreaker for stable sort when timestamps are equal
     arr.sort((a, b) => {
-      if (coverId) {
-        if (a.id === coverId && b.id !== coverId) return -1;
-        if (b.id === coverId && a.id !== coverId) return 1;
-      }
-      return getMillis(b.createdAt) - getMillis(a.createdAt);
+      const aWhen = getMillis((a as any).takenAt ?? a.createdAt);
+      const bWhen = getMillis((b as any).takenAt ?? b.createdAt);
+      if (aWhen !== bWhen) return aWhen - bWhen;
+      // Stable sort: use ID as tiebreaker
+      return (a.id || '').localeCompare(b.id || '');
     });
     return arr;
-  }, [media, trip?.coverMediaId]);
+  }, [media]);
 
   // ---- NEW: Live subscriptions for each place subcollection ----
   useEffect(() => {

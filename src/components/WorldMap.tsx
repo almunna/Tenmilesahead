@@ -63,25 +63,34 @@ export default function WorldMap({
       // Create map instance (attributionControl: false removes the attribution)
       map.current = L.default.map(mapContainer.current, {
         attributionControl: false,
-        preferCanvas: true,
+        preferCanvas: false, // Use SVG renderer for better GeoJSON edge rendering
         fadeAnimation: true,
         zoomAnimation: true,
         minZoom: calculatedMinZoom,
         worldCopyJump: true, // Jump to the "main" world copy when panning far
-        maxBounds: [[-85, -Infinity], [85, Infinity]], // Restrict vertical, allow horizontal wrap
-        maxBoundsViscosity: 1.0, // Rigid vertical bounds
+        maxBounds: [[-85, -Infinity], [85, Infinity]], // Restrict to where tiles exist
+        maxBoundsViscosity: 1.0, // Rigid bounds to prevent scrolling into empty space
       }).setView([20, 0], calculatedMinZoom);
 
-      // Add Carto Positron tiles (detailed map with English labels worldwide)
-      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      // Add Carto Voyager Labels tiles - shows labels on top including remote areas
+      // Using the labels-only layer on top of base for better visibility
+      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png", {
         maxZoom: 20,
         minZoom: calculatedMinZoom,
+        attribution: '© OpenStreetMap contributors, © CARTO',
         keepBuffer: 4, // Keep extra tiles loaded around the visible area
         updateWhenIdle: false, // Update tiles while panning
         updateWhenZooming: false,
         crossOrigin: true,
         subdomains: 'abcd',
       }).addTo(map.current);
+
+      // Invalidate size after a short delay to ensure proper rendering
+      setTimeout(() => {
+        if (map.current) {
+          map.current.invalidateSize();
+        }
+      }, 200);
     });
 
     return () => {
@@ -95,6 +104,9 @@ export default function WorldMap({
   // Add markers for trips and highlight visited countries
   useEffect(() => {
     if (!map.current || !isClient) return;
+
+    // Track if this effect is still active (prevents stale async operations)
+    let isActive = true;
 
     // Remove existing markers
     markersRef.current.forEach((marker) => marker.remove());
@@ -115,6 +127,9 @@ export default function WorldMap({
     const addMarkersAsync = async () => {
       // Wait a bit for map to be fully initialized
       await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Check if effect is still active after the delay
+      if (!isActive || !map.current) return;
 
       // Dynamic import of Leaflet for markers
       const L = await import("leaflet");
@@ -189,6 +204,9 @@ export default function WorldMap({
 
       // SECOND: Add markers for primary trip destinations (red pins)
       for (const trip of trips) {
+        // Skip if effect was cancelled
+        if (!isActive || !map.current) return;
+
         // Skip trips without country for marker placement
         if (!trip.country) {
           continue;
@@ -197,7 +215,7 @@ export default function WorldMap({
         // Try to get coordinates - the API will fallback to state/country if city is wrong
         const coordinates = await getCoordinates(trip.specificAddress, trip.city, trip.state, trip.country);
 
-        if (coordinates && map.current) {
+        if (coordinates && map.current && isActive) {
           // Create marker
           const marker = L.default.marker([coordinates[1], coordinates[0]], {
             icon: primaryIcon,
@@ -239,11 +257,14 @@ export default function WorldMap({
 
       // THIRD: Add markers for additional destinations from subcollections (blue pins)
       for (const dest of allDestinations) {
+        // Skip if effect was cancelled
+        if (!isActive || !map.current) return;
+
         if (!dest.country) continue;
 
         const coordinates = await getCoordinates(dest.specificAddress, dest.city, dest.state, dest.country);
 
-        if (coordinates && map.current) {
+        if (coordinates && map.current && isActive) {
           const marker = L.default.marker([coordinates[1], coordinates[0]], {
             icon: destinationIcon,
           });
@@ -286,13 +307,18 @@ export default function WorldMap({
       }
 
       // Store destinations in state for the sidebar
-      setDestinations(allDestinations);
+      if (isActive) {
+        setDestinations(allDestinations);
+      }
 
       // Highlight visited countries
-      if (visitedCountries.size > 0 && map.current) {
+      if (visitedCountries.size > 0 && map.current && isActive) {
         try {
           // Fetch country boundaries GeoJSON (using Natural Earth 10m for most detailed island boundaries)
           const response = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson');
+
+          // Check if still active after fetch
+          if (!isActive || !map.current) return;
 
           if (!response.ok) {
             console.error('Failed to fetch GeoJSON:', response.status);
@@ -300,6 +326,10 @@ export default function WorldMap({
           }
 
           const countriesGeoJSON = await response.json();
+
+          // Check again after parsing JSON
+          if (!isActive || !map.current) return;
+
           console.log('Visited countries from DB:', Array.from(visitedCountries));
 
           // Comprehensive country name mapping for GeoJSON matching
@@ -589,24 +619,33 @@ export default function WorldMap({
 
           console.log('Found', visitedFeatures.length, 'matching countries to shade');
 
-          // Add highlighted country layers
-          visitedFeatures.forEach((feature: any) => {
-            const layer = L.default.geoJSON(feature, {
-              style: {
-                fillColor: '#ec4899',
-                fillOpacity: 0.35,
-                color: '#ec4899',
-                weight: 2,
-                opacity: 0.7,
-              },
-            });
+          // Create a single GeoJSON layer for all visited countries
+          // This prevents clipping issues at viewport edges
+          const allVisitedGeoJSON = {
+            type: 'FeatureCollection',
+            features: visitedFeatures,
+          };
 
-            if (map.current) {
-              layer.addTo(map.current);
-              layer.bringToBack(); // Ensure country layers are behind markers
-              countryLayersRef.current.push(layer);
-            }
-          });
+          // Create SVG renderer with large padding to prevent edge clipping
+          // padding: 2.0 means 200% extra space beyond viewport for rendering
+          const svgRenderer = L.default.svg({ padding: 2.0 });
+
+          const layer = L.default.geoJSON(allVisitedGeoJSON as any, {
+            style: {
+              fillColor: '#ec4899',
+              fillOpacity: 0.15, // Reduced opacity so roads/cities are visible
+              color: '#ec4899',
+              weight: 1.5,
+              opacity: 0.5,
+            },
+            renderer: svgRenderer,
+          } as any);
+
+          if (map.current && isActive) {
+            layer.addTo(map.current);
+            layer.bringToBack(); // Ensure country layers are behind markers
+            countryLayersRef.current.push(layer);
+          }
         } catch (error) {
           console.error('Error loading country boundaries:', error);
         }
@@ -623,6 +662,11 @@ export default function WorldMap({
     };
 
     addMarkersAsync();
+
+    // Cleanup function to prevent stale async operations from adding layers
+    return () => {
+      isActive = false;
+    };
   }, [trips, onOpenFlip, isClient]);
 
   // Function to pan to a trip marker and open its popup
