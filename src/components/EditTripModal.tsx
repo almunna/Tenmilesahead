@@ -24,18 +24,20 @@ import { COUNTRIES, getStates } from "@/lib/geo";
 import { getCruiseLineNames, getShipsForCruiseLine, OTHER_CRUISE_LINE } from "@/lib/cruiseData";
 import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
 
-/** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
+/** A→Z sort with "United States" pinned to top and "Other/Others/—/N/A/None/-" pinned to the end */
 const isOtherish = (s: string) => {
   const t = s.trim().toLowerCase();
-  return t === "other" || t === "—" || t === "-" || t === "n/a" || t === "none";
+  return t === "other" || t === "others" || t === "—" || t === "-" || t === "n/a" || t === "none";
 };
 const sortAZWithOtherLast = (
-  list: readonly string[] | string[] = []
+  list: readonly string[] | string[] = [],
+  pinFirst?: string
 ): string[] => {
   const arr = [...list].sort((a, b) => a.localeCompare(b));
   const tail = arr.filter(isOtherish);
-  const head = arr.filter((x) => !isOtherish(x));
-  return [...head, ...tail];
+  const head = arr.filter((x) => !isOtherish(x) && x !== pinFirst);
+  const pinned = pinFirst && arr.includes(pinFirst) ? [pinFirst] : [];
+  return [...pinned, ...head, ...tail];
 };
 
 /** Duplicated so nothing else in the app needs to change */
@@ -50,18 +52,6 @@ const TRANSPORT_OPTIONS = [
   "Walk",
 ];
 
-const ACCOMMODATION_OPTIONS = [
-  "Airbnb/VRBO",
-  "Camp",
-  "Condo",
-  "Cruise",
-  "Friends/Family",
-  "Hostel",
-  "Hotel",
-  "House",
-  "Resort",
-  "Other",
-];
 
 export default function EditTripModal({
   trip,
@@ -105,7 +95,6 @@ export default function EditTripModal({
     cruiseShip: initialCruise.cruiseShip,
     customCruiseLine: initialCruise.customCruiseLine,
     customCruiseShip: initialCruise.customCruiseShip,
-    accommodationType: trip.accommodationType || "",
     specificAddress: trip.specificAddress || "",
     startDate: trip.startDate || "",
     endDate: trip.endDate || "",
@@ -136,10 +125,10 @@ export default function EditTripModal({
     f.startDate &&
     f.endDate;
 
-  /** Ensure “Other/Others” actually exist, then sort with Otherish last */
+  /** Ensure "Other/Others" actually exist, then sort with United States first and Otherish last */
   const sortedCountries = useMemo(() => {
     const withOther = new Set<string>([...COUNTRIES, "Other", "Others"]);
-    return sortAZWithOtherLast(Array.from(withOther));
+    return sortAZWithOtherLast(Array.from(withOther), "United States");
   }, []); // stable; COUNTRIES is a module const
 
   const availableStates = useMemo(
@@ -376,7 +365,6 @@ export default function EditTripModal({
         originTransportationType: f.originTransportationType || null,
         cruiseLine: isCruise ? cruiseLineValue || null : null,
         cruiseShip: isCruise ? cruiseShipValue || null : null,
-        accommodationType: f.accommodationType || null,
         specificAddress: f.specificAddress || null,
         startDate: f.startDate,
         endDate: f.endDate,
@@ -1045,25 +1033,6 @@ export default function EditTripModal({
                 </div>
               </>
             )}
-
-            {/* Accommodation */}
-            <div className="md:col-span-3">
-              <label className="label">Accommodation Type</label>
-              <select
-                className="input"
-                value={f.accommodationType}
-                onChange={(e) =>
-                  setF({ ...f, accommodationType: e.target.value })
-                }
-              >
-                <option value="">Select accommodation</option>
-                {ACCOMMODATION_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             {/* Specific Address */}
             <div className="md:col-span-3">

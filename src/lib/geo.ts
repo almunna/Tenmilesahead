@@ -1,5 +1,7 @@
 // lib/geo.ts
+// United States is placed first as most users are expected to be from the US
 export const COUNTRIES = [
+  "United States",
   "Anguilla",
   "Antarctica",
   "Antigua and Barbuda",
@@ -120,7 +122,6 @@ export const COUNTRIES = [
   "UK Overseas Territory",
   "Ukraine",
   "United Arab Emirates",
-  "United States",
   "United States (USVI)",
   "Vanuatu",
   "Venezuela",

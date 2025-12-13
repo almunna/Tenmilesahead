@@ -15,6 +15,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -333,10 +334,10 @@ function HomeInner() {
         </section>
 
         {/* World Map (scaffold) */}
-        <section className="card">
+        <section className="card min-h-[300px] max-h-[500px] overflow-hidden">
           <h2 className="text-xl font-semibold">World Map</h2>
           <p className="text-muted-foreground text-sm mt-1">
-            Countries you’ve visited are shaded; pins mark your trip cities.
+            Countries you've visited are shaded; pins mark your trip cities.
             Click a pin to open the trip.
           </p>
 
@@ -350,29 +351,29 @@ function HomeInner() {
 
             {/* Pin list (clickable) */}
             <div className="rounded-xl border border-border p-3">
-              <div className="text-sm font-semibold mb-2">Trip Pins</div>
-              <ul className="max-h-64 overflow-auto text-sm space-y-1">
-                {trips.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <div className="truncate">
-                      <span className="mr-2">📍</span>
-                      {t.city || "—"}, {t.state ? `${t.state}, ` : ""}
-                      {t.country || "—"}
-                    </div>
-                    <button
-                      className="navlink text-xs"
-                      onClick={() => setFlipTripId(t.id)}
+              <div className="text-sm font-semibold mb-2">All Pins</div>
+              <ul className="text-sm space-y-1 max-h-[200px] md:max-h-[240px] overflow-y-auto pr-2">
+                  {trips.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-center justify-between gap-2"
                     >
-                      View Flipbook
-                    </button>
-                  </li>
-                ))}
-                {trips.length === 0 && (
-                  <li className="text-muted-foreground">No trips yet.</li>
-                )}
+                      <div className="truncate">
+                        <span className="mr-2">📍</span>
+                        {t.city || "—"}, {t.state ? `${t.state}, ` : ""}
+                        {t.country || "—"}
+                      </div>
+                      <button
+                        className="navlink text-xs shrink-0"
+                        onClick={() => setFlipTripId(t.id)}
+                      >
+                        View Flipbook
+                      </button>
+                    </li>
+                  ))}
+                  {trips.length === 0 && (
+                    <li className="text-muted-foreground">No trips yet.</li>
+                  )}
               </ul>
             </div>
           </div>
@@ -735,6 +736,12 @@ function PhotosModal({
     if (files.length === 0) return;
     setSaving(true);
     try {
+      // Check if trip already has a cover photo
+      const tripSnap = await getDoc(doc(db, "trips", tripId));
+      const existingCoverMediaId = tripSnap.exists()
+        ? tripSnap.data()?.coverMediaId
+        : null;
+
       // upload each, write media docs, set cover if chosen
       let chosenCoverMediaId: string | null = null;
       let firstImageMediaId: string | null = null;
@@ -777,8 +784,13 @@ function PhotosModal({
         }
       }
 
+      // Only update cover photo if:
+      // 1. User explicitly chose a new cover (coverKey is set), OR
+      // 2. Trip doesn't have an existing cover photo
+      const shouldUpdateCover = coverKey !== null || !existingCoverMediaId;
       const coverId = chosenCoverMediaId || firstImageMediaId;
-      if (coverId) {
+
+      if (coverId && shouldUpdateCover) {
         await updateDoc(doc(db, "trips", tripId), {
           coverMediaId: coverId,
           updatedAt: Date.now(),

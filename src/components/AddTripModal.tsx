@@ -15,7 +15,7 @@ import { COUNTRIES, getStates } from "@/lib/geo";
 import { getCruiseLineNames, getShipsForCruiseLine, OTHER_CRUISE_LINE } from "@/lib/cruiseData";
 import TripCreateMediaPicker from "@/components/TripCreateMediaPicker";
 
-/** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
+/** A→Z sort with "United States" pinned to top and "Other/Others/—/N/A/None/-" pinned to the end */
 const isOtherish = (s: string) => {
   const t = s.trim().toLowerCase();
   return (
@@ -28,12 +28,14 @@ const isOtherish = (s: string) => {
   );
 };
 const sortAZWithOtherLast = (
-  list: readonly string[] | string[] = []
+  list: readonly string[] | string[] = [],
+  pinFirst?: string
 ): string[] => {
   const arr = [...list].sort((a, b) => a.localeCompare(b));
   const tail = arr.filter(isOtherish);
-  const head = arr.filter((x) => !isOtherish(x));
-  return [...head, ...tail];
+  const head = arr.filter((x) => !isOtherish(x) && x !== pinFirst);
+  const pinned = pinFirst && arr.includes(pinFirst) ? [pinFirst] : [];
+  return [...pinned, ...head, ...tail];
 };
 
 /** Duplicated so nothing else in the app needs to change */
@@ -103,10 +105,10 @@ export default function AddTripModal({
     !!f.startDate &&
     !!f.endDate;
 
-  /** Ensure “Other/Others” exist, then sort with Otherish last */
+  /** Ensure "Other/Others" exist, then sort with United States first and Otherish last */
   const sortedCountries = useMemo(() => {
     const withOther = new Set<string>([...COUNTRIES, "Other", "Others"]);
-    return sortAZWithOtherLast(Array.from(withOther));
+    return sortAZWithOtherLast(Array.from(withOther), "United States");
   }, []);
   const availableStates = useMemo(
     () => sortAZWithOtherLast(getStates(f.country)),

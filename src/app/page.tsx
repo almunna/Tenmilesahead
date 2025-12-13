@@ -801,6 +801,10 @@ function HomeInner() {
           transportCounts[t.originTransportationType] = (transportCounts[t.originTransportationType] || 0) + 1;
         }
 
+        // Check if this is a cruise trip - if so, don't count "Cruise" from subcollections
+        // (multiple destinations on a cruise are still the same cruise)
+        const isCruiseTrip = t.originTransportationType === "Cruise";
+
         // Note: Main trip's accommodationType is not counted here
         // Accommodations are only counted from the accommodations subcollection
         // to avoid double-counting
@@ -844,8 +848,8 @@ function HomeInner() {
           const destIsUSA = dest.country && ['united states', 'usa', 'us', 'united states of america'].includes(dest.country.toLowerCase().trim());
           if (dest.state && dest.state.trim() && destIsUSA) sSet.add(dest.state.trim());
           if (dest.city) citySet.add(`${dest.city}|${dest.country || ""}`);
-          // Count transportation from destinations
-          if (dest.transportationType) {
+          // Count transportation from destinations (skip Cruise if already counted at trip level)
+          if (dest.transportationType && !(isCruiseTrip && dest.transportationType === "Cruise")) {
             transportCounts[dest.transportationType] = (transportCounts[dest.transportationType] || 0) + 1;
           }
         }
@@ -856,8 +860,8 @@ function HomeInner() {
         );
         actSnap.forEach((a) => {
           const act = a.data() as any;
-          // Count transportation from activities
-          if (act.transportationType) {
+          // Count transportation from activities (skip Cruise if already counted at trip level)
+          if (act.transportationType && !(isCruiseTrip && act.transportationType === "Cruise")) {
             transportCounts[act.transportationType] = (transportCounts[act.transportationType] || 0) + 1;
           }
         });
@@ -871,8 +875,8 @@ function HomeInner() {
           if (acc.accommodationType) {
             accommodationCounts[acc.accommodationType] = (accommodationCounts[acc.accommodationType] || 0) + 1;
           }
-          // Count transportation from accommodations
-          if (acc.transportationType) {
+          // Count transportation from accommodations (skip Cruise if already counted at trip level)
+          if (acc.transportationType && !(isCruiseTrip && acc.transportationType === "Cruise")) {
             transportCounts[acc.transportationType] = (transportCounts[acc.transportationType] || 0) + 1;
           }
         });
@@ -883,8 +887,8 @@ function HomeInner() {
         );
         restaurantSnap.forEach((r) => {
           const rest = r.data() as any;
-          // Count transportation from restaurants
-          if (rest.transportationType) {
+          // Count transportation from restaurants (skip Cruise if already counted at trip level)
+          if (rest.transportationType && !(isCruiseTrip && rest.transportationType === "Cruise")) {
             transportCounts[rest.transportationType] = (transportCounts[rest.transportationType] || 0) + 1;
           }
         });

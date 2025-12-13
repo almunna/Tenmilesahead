@@ -11,6 +11,7 @@ import {
   deleteDoc,
   addDoc,
   getDocs,
+  getDoc,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
@@ -144,6 +145,10 @@ export function PhotosModal({
     if (files.length === 0) return;
     setSaving(true);
     try {
+      // Check if trip already has a cover photo
+      const tripSnap = await getDoc(doc(db, "trips", tripId));
+      const existingCoverMediaId = tripSnap.exists() ? tripSnap.data()?.coverMediaId : null;
+
       let chosenCoverMediaId: string | null = null;
       let firstImageMediaId: string | null = null;
 
@@ -185,8 +190,13 @@ export function PhotosModal({
         }
       }
 
+      // Only update cover photo if:
+      // 1. User explicitly chose a new cover (coverKey is set), OR
+      // 2. Trip doesn't have an existing cover photo
+      const shouldUpdateCover = coverKey !== null || !existingCoverMediaId;
       const coverId = chosenCoverMediaId || firstImageMediaId;
-      if (coverId) {
+
+      if (coverId && shouldUpdateCover) {
         await updateDoc(doc(db, "trips", tripId), {
           coverMediaId: coverId,
           updatedAt: Date.now(),

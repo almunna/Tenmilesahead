@@ -35,7 +35,7 @@ import PlaceModal from "@/components/modals/PlaceModal";
 import ShareTripModal from "@/components/modals/ShareTripModal";
 import ConfirmModal from "@/components/modals/ConfirmModal";
 
-/** A→Z sort with “Other/Others/—/N/A/None/-” pinned to the end */
+/** A→Z sort with "United States" pinned to top and "Other/Others/—/N/A/None/-" pinned to the end */
 const isOtherish = (s: string) => {
   const t = s.trim().toLowerCase();
   return (
@@ -48,12 +48,14 @@ const isOtherish = (s: string) => {
   );
 };
 const sortAZWithOtherLast = (
-  list: readonly string[] | string[] = []
+  list: readonly string[] | string[] = [],
+  pinFirst?: string
 ): string[] => {
   const arr = [...list].sort((a, b) => a.localeCompare(b));
   const tail = arr.filter(isOtherish);
-  const head = arr.filter((x) => !isOtherish(x));
-  return [...head, ...tail];
+  const head = arr.filter((x) => !isOtherish(x) && x !== pinFirst);
+  const pinned = pinFirst && arr.includes(pinFirst) ? [pinFirst] : [];
+  return [...pinned, ...head, ...tail];
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -433,7 +435,7 @@ function TripsInner() {
 
   const dateRangeOf = (t: Trip) => `${fmt(t.startDate)} → ${fmt(t.endDate)}`;
 
-  const sortedCountries = useMemo(() => sortAZWithOtherLast(COUNTRIES), []);
+  const sortedCountries = useMemo(() => sortAZWithOtherLast(COUNTRIES, "United States"), []);
   const availableStates = useMemo(
     () => sortAZWithOtherLast(getStates(form.country)),
     [form.country]

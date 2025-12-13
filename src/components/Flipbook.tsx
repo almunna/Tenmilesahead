@@ -300,14 +300,14 @@ export default function Flipbook({
         }
       }
 
-      // Sort reverse chronologically by takenAt (if available) or createdAt (newest first)
+      // Sort chronologically by takenAt (if available) or createdAt (oldest first)
       // Use document ID as tiebreaker for stable sort when timestamps are equal
       arr.sort((a, b) => {
         const aWhen = getMillis((a as any).takenAt ?? (a as any).createdAt);
         const bWhen = getMillis((b as any).takenAt ?? (b as any).createdAt);
-        if (aWhen !== bWhen) return bWhen - aWhen; // Reversed: newest first
-        // Stable sort: use ID as tiebreaker (reversed)
-        return (b.id || '').localeCompare(a.id || '');
+        if (aWhen !== bWhen) return aWhen - bWhen;
+        // Stable sort: use ID as tiebreaker
+        return (a.id || '').localeCompare(b.id || '');
       });
       setItems(arr);
       if (currentPage > arr.length) setCurrentPage(0);
@@ -398,27 +398,39 @@ export default function Flipbook({
     wasSwipe.current = false;
   };
 
-  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!dragging.current || zoomedImage || isFlipping) return;
-    const touch = e.touches[0];
-    deltaX.current = touch.clientX - startX.current;
-    deltaY.current = touch.clientY - startY.current;
+  // Use native event listener for touchmove to allow preventDefault on non-passive listener
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-    // Determine swipe direction on first significant movement
-    if (swipeDirection.current === null) {
-      const absX = Math.abs(deltaX.current);
-      const absY = Math.abs(deltaY.current);
-      if (absX > 10 || absY > 10) {
-        swipeDirection.current = absX > absY ? "horizontal" : "vertical";
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragging.current || zoomedImage || isFlipping) return;
+      const touch = e.touches[0];
+      deltaX.current = touch.clientX - startX.current;
+      deltaY.current = touch.clientY - startY.current;
+
+      // Determine swipe direction on first significant movement
+      if (swipeDirection.current === null) {
+        const absX = Math.abs(deltaX.current);
+        const absY = Math.abs(deltaY.current);
+        if (absX > 10 || absY > 10) {
+          swipeDirection.current = absX > absY ? "horizontal" : "vertical";
+        }
       }
-    }
 
-    // If horizontal swipe, prevent vertical scroll
-    if (swipeDirection.current === "horizontal") {
-      e.preventDefault();
-      wasSwipe.current = true;
-    }
-  };
+      // If horizontal swipe, prevent vertical scroll
+      if (swipeDirection.current === "horizontal") {
+        e.preventDefault();
+        wasSwipe.current = true;
+      }
+    };
+
+    // Add non-passive listener to allow preventDefault
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => {
+      container.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, [zoomedImage, isFlipping]);
 
   const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!dragging.current || zoomedImage || isFlipping) return;
@@ -560,7 +572,6 @@ export default function Flipbook({
         className="flex-1 flex items-center justify-center relative px-2 sm:px-4 py-2 sm:py-6"
         style={{ touchAction: "none" }}
         onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
