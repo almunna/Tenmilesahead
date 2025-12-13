@@ -109,12 +109,19 @@ export default function TripDetailMap({
         maxBoundsViscosity: 1.0, // Rigid vertical bounds
       }).setView([20, 0], 2);
 
-      // Add CartoDB Voyager tiles (free, English labels worldwide!)
-      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-        minZoom: 2,
-        subdomains: 'abcd',
-      }).addTo(map.current);
+      // Add Google Maps tiles - detailed with English labels (same as WorldMap)
+      L.default.tileLayer(
+        "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=en",
+        {
+          maxZoom: 20,
+          minZoom: 2,
+          attribution: "© Google Maps",
+          keepBuffer: 4,
+          updateWhenIdle: false,
+          updateWhenZooming: false,
+          crossOrigin: true,
+        }
+      ).addTo(map.current);
 
       // Map is ready
       setMapReady(true);

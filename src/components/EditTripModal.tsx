@@ -61,6 +61,8 @@ export default function EditTripModal({
   onClose: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  // Local state to track cover photo (since trip prop doesn't update)
+  const [currentCoverMediaId, setCurrentCoverMediaId] = useState<string | null>(trip.coverMediaId || null);
 
   // Determine initial cruise field values from existing trip data
   const getInitialCruiseFields = () => {
@@ -177,6 +179,7 @@ export default function EditTripModal({
       coverMediaId: mediaId,
       updatedAt: Date.now(),
     } as any);
+    setCurrentCoverMediaId(mediaId);
   }
 
   async function saveCaption(mediaId: string, caption: string) {
@@ -195,11 +198,12 @@ export default function EditTripModal({
       }
     } catch {}
     await deleteDoc(doc(db, "trips", trip.id, "media", m.id));
-    if (trip.coverMediaId === m.id) {
+    if (currentCoverMediaId === m.id) {
       await updateDoc(doc(db, "trips", trip.id), {
         coverMediaId: null,
         updatedAt: Date.now(),
       } as any);
+      setCurrentCoverMediaId(null);
     }
   }
 
@@ -245,15 +249,19 @@ export default function EditTripModal({
     };
   }, [previewUrls]);
 
-  // Default a cover choice among NEW images if user hasn't picked one
+  // Only default a cover choice if trip doesn't already have a cover photo
+  // This prevents accidentally overwriting an existing cover when adding new photos
   useEffect(() => {
     const firstImg = newPhotos[0];
-    if (!newCoverKey) {
-      if (firstImg) setNewCoverKey(fileKey(firstImg));
-    } else if (!selectedKeys.includes(newCoverKey)) {
-      setNewCoverKey(firstImg ? fileKey(firstImg) : null);
+    // If user removed the photo that was selected as new cover, clear it
+    if (newCoverKey && !selectedKeys.includes(newCoverKey)) {
+      setNewCoverKey(null);
     }
-  }, [newPhotos, selectedKeys]);
+    // Only auto-select first image as cover if trip has NO existing cover
+    if (!newCoverKey && !currentCoverMediaId && firstImg) {
+      setNewCoverKey(fileKey(firstImg));
+    }
+  }, [newPhotos, selectedKeys, currentCoverMediaId]);
 
   function setNewCaption(k: string, v: string) {
     setNewCaptions((prev) => ({ ...prev, [k]: v }));
@@ -330,11 +338,16 @@ export default function EditTripModal({
         }
       }
 
-      if (chosenCoverId) {
+      // Only update cover if:
+      // 1. User explicitly chose a new cover from the uploaded files, OR
+      // 2. Trip doesn't have an existing cover (set first image as cover)
+      const shouldUpdateCover = chosenCoverId && (newCoverKey !== null || !currentCoverMediaId);
+      if (shouldUpdateCover) {
         await updateDoc(doc(db, "trips", trip.id), {
           coverMediaId: chosenCoverId,
           updatedAt: Date.now(),
         } as any);
+        setCurrentCoverMediaId(chosenCoverId);
       }
 
       // reset pending UI
@@ -446,14 +459,14 @@ export default function EditTripModal({
           <button
             type="button"
             className={
-              trip.coverMediaId === m.id
+              currentCoverMediaId === m.id
                 ? "text-sm text-green-600 cursor-default"
                 : "text-sm link"
             }
-            onClick={() => trip.coverMediaId !== m.id && setCover(m.id!)}
-            disabled={trip.coverMediaId === m.id}
+            onClick={() => currentCoverMediaId !== m.id && setCover(m.id!)}
+            disabled={currentCoverMediaId === m.id}
           >
-            {trip.coverMediaId === m.id ? "✓ Cover" : "Set as cover"}
+            {currentCoverMediaId === m.id ? "✓ Cover" : "Set as cover"}
           </button>
 
           <button
@@ -556,12 +569,12 @@ export default function EditTripModal({
 
   // Build ordered list: [coverExisting], [pending new], [rest existing]
   const coverExisting = useMemo(
-    () => media.find((m) => m.id === trip.coverMediaId) || null,
-    [media, trip.coverMediaId]
+    () => media.find((m) => m.id === currentCoverMediaId) || null,
+    [media, currentCoverMediaId]
   );
   const restExisting = useMemo(
-    () => media.filter((m) => m.id !== trip.coverMediaId),
-    [media, trip.coverMediaId]
+    () => media.filter((m) => m.id !== currentCoverMediaId),
+    [media, currentCoverMediaId]
   );
 
   return (
