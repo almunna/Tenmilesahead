@@ -848,9 +848,13 @@ function HomeInner() {
           const destIsUSA = dest.country && ['united states', 'usa', 'us', 'united states of america'].includes(dest.country.toLowerCase().trim());
           if (dest.state && dest.state.trim() && destIsUSA) sSet.add(dest.state.trim());
           if (dest.city) citySet.add(`${dest.city}|${dest.country || ""}`);
-          // Count transportation from destinations (skip Cruise if already counted at trip level)
-          if (dest.transportationType && !(isCruiseTrip && dest.transportationType === "Cruise")) {
+          // Count transportation from destinations (skip Cruise - it goes to stays instead)
+          if (dest.transportationType && dest.transportationType !== "Cruise") {
             transportCounts[dest.transportationType] = (transportCounts[dest.transportationType] || 0) + 1;
+          }
+          // If transportationType is Cruise, count in accommodation stats (stays) instead
+          if (dest.transportationType === "Cruise") {
+            accommodationCounts["Cruise"] = (accommodationCounts["Cruise"] || 0) + 1;
           }
         }
 
@@ -864,6 +868,10 @@ function HomeInner() {
           if (act.transportationType && !(isCruiseTrip && act.transportationType === "Cruise")) {
             transportCounts[act.transportationType] = (transportCounts[act.transportationType] || 0) + 1;
           }
+          // If onShip is true, count as Cruise in accommodation stats
+          if (act.onShip) {
+            accommodationCounts["Cruise"] = (accommodationCounts["Cruise"] || 0) + 1;
+          }
         });
 
         // Accommodations subcollection
@@ -872,7 +880,10 @@ function HomeInner() {
         );
         accomSnap.forEach((a) => {
           const acc = a.data() as any;
-          if (acc.accommodationType) {
+          // If onShip is true, count as Cruise in accommodation stats (instead of regular accommodationType)
+          if (acc.onShip) {
+            accommodationCounts["Cruise"] = (accommodationCounts["Cruise"] || 0) + 1;
+          } else if (acc.accommodationType) {
             accommodationCounts[acc.accommodationType] = (accommodationCounts[acc.accommodationType] || 0) + 1;
           }
           // Count transportation from accommodations (skip Cruise if already counted at trip level)
@@ -890,6 +901,10 @@ function HomeInner() {
           // Count transportation from restaurants (skip Cruise if already counted at trip level)
           if (rest.transportationType && !(isCruiseTrip && rest.transportationType === "Cruise")) {
             transportCounts[rest.transportationType] = (transportCounts[rest.transportationType] || 0) + 1;
+          }
+          // If onShip is true, count as Cruise in accommodation stats
+          if (rest.onShip) {
+            accommodationCounts["Cruise"] = (accommodationCounts["Cruise"] || 0) + 1;
           }
         });
 
