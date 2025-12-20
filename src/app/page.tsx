@@ -474,12 +474,31 @@ async function geocodeLocation(
     // Parse location string (expected format: "city, state, country" or "city, country")
     const parts = location.split(",").map((p) => p.trim());
     const city = parts[0] || "";
-    const country = parts[parts.length - 1] || "";
+
+    // Handle state/division parameter for 3-part locations
+    let state = "";
+    let country = "";
+
+    if (parts.length === 3) {
+      // Format: "city, state, country"
+      state = parts[1] || "";
+      country = parts[2] || "";
+    } else if (parts.length === 2) {
+      // Format: "city, country"
+      country = parts[1] || "";
+    } else {
+      // Just country
+      country = parts[parts.length - 1] || "";
+    }
+
+    // Build query with state parameter
+    const params = new URLSearchParams();
+    params.set('city', city);
+    if (state) params.set('state', state);
+    params.set('country', country);
 
     // Use our API route to avoid CORS issues
-    const response = await fetch(
-      `/api/geocode?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}`
-    );
+    const response = await fetch(`/api/geocode?${params.toString()}`);
 
     if (!response.ok) {
       return null;

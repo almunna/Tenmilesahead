@@ -18,7 +18,9 @@
       "Bash(npm run deploy:rules:*)",
       "Bash(npx firebase-tools:*)",
       "Bash(npm run:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)"
     ],
     "deny": [],
     "ask": []

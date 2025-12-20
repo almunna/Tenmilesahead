@@ -52,30 +52,24 @@ export async function GET(request: NextRequest) {
     // If city equals country (e.g., "Anguilla, Anguilla"), just use country
     const effectiveCity = city && country && city.toLowerCase().trim() === country.toLowerCase().trim() ? null : city;
 
-    // Build structured query URL for better accuracy
-    // Using structured query parameters instead of free-form q= to avoid ambiguity
-    const structuredParams = new URLSearchParams();
-    structuredParams.set('format', 'json');
-    structuredParams.set('limit', '5'); // Get multiple results to filter
-    structuredParams.set('addressdetails', '1');
+    // Build query URL
+    // Use free-form query (q=) instead of structured parameters for better multilingual support
+    const params = new URLSearchParams();
+    params.set('format', 'json');
+    params.set('limit', '5'); // Get multiple results to filter
+    params.set('addressdetails', '1');
 
-    // Use structured query when we have specific components
-    if (effectiveCity && country) {
-      structuredParams.set('city', effectiveCity);
-      if (state) structuredParams.set('state', state);
-      structuredParams.set('country', country);
-      if (address) structuredParams.set('street', address);
-    } else if (country) {
-      // Just search for state + country or just country
-      const fallbackQuery = [state, country].filter(Boolean).join(', ');
-      structuredParams.set('q', fallbackQuery);
-    } else {
-      // Fallback to free-form query
-      structuredParams.set('q', queryString);
-    }
+    // Build the search query from components
+    const queryParts: string[] = [];
+    if (address) queryParts.push(address);
+    if (effectiveCity) queryParts.push(effectiveCity);
+    if (state) queryParts.push(state);
+    if (country) queryParts.push(country);
+
+    params.set('q', queryParts.join(', '));
 
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?${structuredParams.toString()}`,
+      `https://nominatim.openstreetmap.org/search?${params.toString()}`,
       {
         headers: {
           'User-Agent': 'TenMilesAhead-TravelApp/1.0',
@@ -132,11 +126,40 @@ export async function GET(request: NextRequest) {
         filteredResults = data.filter((result: any) => {
           const addressDetails = result.address || {};
           const resultCountry = (addressDetails.country || '').toLowerCase().trim();
+          const resultCountryCode = (addressDetails.country_code || '').toLowerCase().trim();
 
-          // Check if result country matches any of our variants
-          return countryVariants.some(variant =>
-            resultCountry.includes(variant) || variant.includes(resultCountry)
-          );
+          // Check if result country matches any of our variants (by name or country code)
+          return countryVariants.some(variant => {
+            // Match by country name
+            if (resultCountry.includes(variant) || variant.includes(resultCountry)) {
+              return true;
+            }
+            // Match by country code (e.g., "bd" for Bangladesh, "us" for USA)
+            // Country codes are typically 2-letter ISO codes
+            if (variant.length === 2 && resultCountryCode === variant) {
+              return true;
+            }
+            // Also check if the variant might be a country name that maps to this code
+            // For example: "bangladesh" should match country_code="bd"
+            const countryCodeMappings: { [key: string]: string } = {
+              'bangladesh': 'bd',
+              'united states': 'us',
+              'usa': 'us',
+              'us': 'us',
+              'india': 'in',
+              'pakistan': 'pk',
+              'united kingdom': 'gb',
+              'uk': 'gb',
+              'canada': 'ca',
+              'australia': 'au',
+              'anguilla': 'ai',
+            };
+            const expectedCode = countryCodeMappings[variant];
+            if (expectedCode && resultCountryCode === expectedCode) {
+              return true;
+            }
+            return false;
+          });
         });
       }
 
