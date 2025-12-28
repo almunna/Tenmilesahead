@@ -62,7 +62,7 @@ const TRANSPORT_ICONS: Record<string, string> = {
 
 // Color coding for different types
 const PIN_COLORS = {
-  destination: { fill: "#2563eb", stroke: "#1d4ed8" }, // Blue
+  destination: { fill: "#DC2626", stroke: "#991B1B" }, // Red (same as world map)
   activity: { fill: "#16a34a", stroke: "#15803d" }, // Green
   restaurant: { fill: "#eab308", stroke: "#ca8a04" }, // Yellow
   trip: { fill: "#DC2626", stroke: "#991B1B" }, // Red (main trip location)
@@ -187,35 +187,16 @@ export default function TripDetailMap({
         });
       };
 
-      // Variables to store coordinates for connecting line
-      let tripCoords: [number, number] | null = null;
+      // Variable to store origin coordinates for connecting lines
       let originCoords: [number, number] | null = null;
+      // Array to store all destination coordinates with dates for chronological ordering
+      const destinationData: Array<{
+        coords: [number, number];
+        startDate: string | null;
+        name: string;
+      }> = [];
 
-      // Add main trip marker
-      if (tripCity && tripCountry) {
-        console.log("TripDetailMap: Geocoding trip location", tripCity, tripCountry);
-        const coords = await getCoordinates(null, tripCity, null, tripCountry);
-        console.log("TripDetailMap: Trip coords", coords);
-        if (coords && map.current) {
-          tripCoords = coords;
-          const marker = L.default.marker([coords[1], coords[0]], {
-            icon: createIcon("trip"),
-            zIndexOffset: 1000, // Main trip pin on top
-          });
-          marker.bindPopup(`
-            <div style="padding: 8px; min-width: 150px;">
-              <strong style="color: #DC2626;">Trip Location</strong><br/>
-              <span style="color: #666;">${tripCity}, ${tripCountry}</span>
-            </div>
-          `);
-          marker.addTo(map.current);
-          markersRef.current.push(marker);
-          validCoordinates.push([coords[1], coords[0]]);
-          console.log("TripDetailMap: Added trip marker at", coords);
-        }
-      }
-
-      // Add origin/starting point marker
+      // Add origin/starting point marker (no primary destination marker)
       if (originCity && originCountry) {
         console.log("TripDetailMap: Geocoding origin location", originAddress, originCity, originState, originCountry);
         const coords = await getCoordinates(originAddress, originCity, originState, originCountry);
@@ -224,7 +205,7 @@ export default function TripDetailMap({
           originCoords = coords;
           const marker = L.default.marker([coords[1], coords[0]], {
             icon: createIcon("origin", originTransportationType),
-            zIndexOffset: 900, // Below trip pin but above others
+            zIndexOffset: 900, // High z-index for starting point
           });
 
           const transportBadge = originTransportationType
@@ -247,25 +228,6 @@ export default function TripDetailMap({
         }
       }
 
-      // Draw connecting line between origin and trip destination
-      if (originCoords && tripCoords && map.current) {
-        const polyline = L.default.polyline(
-          [
-            [originCoords[1], originCoords[0]], // Origin point [lat, lng]
-            [tripCoords[1], tripCoords[0]], // Trip destination [lat, lng]
-          ],
-          {
-            color: "#9333ea", // Purple to match origin pin
-            weight: 3,
-            opacity: 0.7,
-            dashArray: "10, 10", // Dashed line
-          }
-        );
-        polyline.addTo(map.current);
-        markersRef.current.push(polyline); // Store for cleanup
-        console.log("TripDetailMap: Added connecting line from origin to trip");
-      }
-
       // Add destination markers
       for (const dest of destinations) {
         // Skip destinations marked as onShip (no location)
@@ -279,18 +241,25 @@ export default function TripDetailMap({
         const coords = await getCoordinates(dest.address, city, dest.state, country);
         console.log("TripDetailMap: Destination coords", coords);
         if (coords && map.current) {
+          // Store coordinates with date for chronological ordering
+          destinationData.push({
+            coords: coords,
+            startDate: dest.startDate || null,
+            name: dest.name,
+          });
+
           const transportMode = dest.transportationMode || dest.transportationType;
           const marker = L.default.marker([coords[1], coords[0]], {
             icon: createIcon("destination", transportMode),
           });
 
           const transportBadge = transportMode
-            ? `<br/><span style="background: #2563eb; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">${transportMode}</span>`
+            ? `<br/><span style="background: #DC2626; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">${transportMode}</span>`
             : "";
 
           marker.bindPopup(`
             <div style="padding: 8px; min-width: 150px;">
-              <strong style="color: #2563eb;">Destination</strong><br/>
+              <strong style="color: #DC2626;">Destination</strong><br/>
               <span style="font-weight: 500;">${dest.name}</span><br/>
               <span style="color: #666; font-size: 12px;">${city}${dest.state ? `, ${dest.state}` : ""}, ${country}</span>
               ${transportBadge}
@@ -377,6 +346,58 @@ export default function TripDetailMap({
         }
       }
 
+      // Draw chronological connecting lines: origin → dest1 → dest2 → etc.
+      if (originCoords && destinationData.length > 0 && map.current) {
+        // Sort destinations chronologically by startDate
+        const sortedDestinations = [...destinationData].sort((a, b) => {
+          if (!a.startDate || !b.startDate) return 0;
+          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        });
+
+        console.log(`TripDetailMap: Drawing chronological path with ${sortedDestinations.length} destinations`);
+
+        // Draw line from origin to first destination
+        if (sortedDestinations.length > 0) {
+          const firstDest = sortedDestinations[0];
+          const polyline = L.default.polyline(
+            [
+              [originCoords[1], originCoords[0]], // Origin point [lat, lng]
+              [firstDest.coords[1], firstDest.coords[0]], // First destination [lat, lng]
+            ],
+            {
+              color: "#9333ea", // Purple to match origin pin
+              weight: 2,
+              opacity: 0.6,
+              dashArray: "8, 8", // Dashed line
+            }
+          );
+          polyline.addTo(map.current);
+          markersRef.current.push(polyline);
+          console.log(`TripDetailMap: Added line from origin to ${firstDest.name}`);
+        }
+
+        // Draw lines between consecutive destinations
+        for (let i = 1; i < sortedDestinations.length; i++) {
+          const prevDest = sortedDestinations[i - 1];
+          const currDest = sortedDestinations[i];
+          const polyline = L.default.polyline(
+            [
+              [prevDest.coords[1], prevDest.coords[0]], // Previous destination [lat, lng]
+              [currDest.coords[1], currDest.coords[0]], // Current destination [lat, lng]
+            ],
+            {
+              color: "#DC2626", // Red to match destination pins
+              weight: 2,
+              opacity: 0.6,
+              dashArray: "8, 8", // Dashed line
+            }
+          );
+          polyline.addTo(map.current);
+          markersRef.current.push(polyline);
+          console.log(`TripDetailMap: Added line from ${prevDest.name} to ${currDest.name}`);
+        }
+      }
+
       // Fit map to show all markers
       console.log("TripDetailMap: Total valid coordinates", validCoordinates.length);
       if (validCoordinates.length > 0 && map.current) {
@@ -403,13 +424,11 @@ export default function TripDetailMap({
       <style dangerouslySetInnerHTML={{ __html: markerStyles }} />
       <h2 className="text-xl font-semibold">Trip Map</h2>
       <p className="text-muted-foreground text-sm mt-1">
-        Pin drops for your trip locations.
+        Pin drops for your trip locations. Lines show chronological travel path by date.
         <span className="inline-flex items-center gap-2 ml-2 flex-wrap">
           <span className="inline-block w-3 h-3 rounded-full bg-[#9333ea]"></span>
           <span className="text-xs">Starting Point</span>
           <span className="inline-block w-3 h-3 rounded-full bg-[#DC2626]"></span>
-          <span className="text-xs">Trip</span>
-          <span className="inline-block w-3 h-3 rounded-full bg-[#2563eb]"></span>
           <span className="text-xs">Destination</span>
           <span className="inline-block w-3 h-3 rounded-full bg-[#16a34a]"></span>
           <span className="text-xs">Activity</span>

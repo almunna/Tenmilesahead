@@ -85,9 +85,6 @@ export default function EditTripModal({
 
   const [f, setF] = useState({
     name: trip.name || "",
-    city: trip.city || "",
-    state: trip.state || "",
-    country: trip.country || "",
     originCity: trip.originCity || "",
     originState: trip.originState || "",
     originCountry: trip.originCountry || "",
@@ -121,8 +118,6 @@ export default function EditTripModal({
 
   const canSave =
     f.name &&
-    f.city &&
-    f.country &&
     isCruiseComplete &&
     f.startDate &&
     f.endDate;
@@ -132,11 +127,6 @@ export default function EditTripModal({
     const withOther = new Set<string>([...COUNTRIES, "Other", "Others"]);
     return sortAZWithOtherLast(Array.from(withOther), "United States");
   }, []); // stable; COUNTRIES is a module const
-
-  const availableStates = useMemo(
-    () => sortAZWithOtherLast(getStates(f.country)),
-    [f.country]
-  );
 
   const availableOriginStates = useMemo(
     () => sortAZWithOtherLast(getStates(f.originCountry)),
@@ -368,9 +358,10 @@ export default function EditTripModal({
       const ref = doc(db, "trips", trip.id);
       await updateDoc(ref, {
         name: f.name,
-        city: f.city,
-        state: f.state || null,
-        country: f.country,
+        // Keep existing city and country values (required by Firestore rules)
+        city: trip.city,
+        state: trip.state || null,
+        country: trip.country,
         originCity: f.originCity || null,
         originState: f.originState || null,
         originCountry: f.originCountry || null,
@@ -402,9 +393,10 @@ export default function EditTripModal({
             shipName: cruiseShipValue,
             startDate: f.startDate || null,
             endDate: f.endDate || null,
-            city: f.city || null,
-            state: f.state || null,
-            country: f.country,
+            // Use origin location or existing trip destination for cruise subcollection
+            city: f.originCity || trip.city,
+            state: f.originState || trip.state || null,
+            country: f.originCountry || trip.country,
             review: cruiseReview.review || null,
             qualityRating: cruiseReview.qualityRating,
             valueRating: cruiseReview.valueRating,
@@ -760,78 +752,6 @@ export default function EditTripModal({
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Destination Section Header */}
-            <div className="md:col-span-3">
-              <h4 className="text-lg font-semibold text-foreground mt-3 mb-1">
-                Destination
-              </h4>
-            </div>
-
-            {/* Country → State/Province → City */}
-            <div>
-              <label className="label">Country *</label>
-              <select
-                className="input"
-                value={f.country}
-                onChange={(e) => {
-                  const newCountry = e.target.value;
-                  const states = getStates(newCountry);
-                  const nextState = states.includes(f.state) ? f.state : "";
-                  setF({ ...f, country: newCountry, state: nextState });
-                }}
-              >
-                <option value="">Select country</option>
-                {sortedCountries.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">State / Province / Island</label>
-              {availableStates.length ? (
-                <>
-                  <select
-                    className="input"
-                    value={availableStates.includes(f.state) ? f.state : ""}
-                    onChange={(e) => setF({ ...f, state: e.target.value })}
-                  >
-                    <option value="">Select from list</option>
-                    {availableStates.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="input mt-2"
-                    placeholder="Or enter manually (e.g., custom island)"
-                    value={availableStates.includes(f.state) ? "" : f.state}
-                    onChange={(e) => setF({ ...f, state: e.target.value })}
-                  />
-                </>
-              ) : (
-                <input
-                  className="input"
-                  placeholder="e.g., California, Bali, etc."
-                  value={f.state}
-                  onChange={(e) => setF({ ...f, state: e.target.value })}
-                />
-              )}
-            </div>
-
-            <div>
-              <label className="label">City *</label>
-              <input
-                className="input"
-                placeholder="e.g., Paris"
-                value={f.city}
-                onChange={(e) => setF({ ...f, city: e.target.value })}
-              />
             </div>
 
             {/* Cruise Line Selection (only shown when Cruise is selected via origin transportation) */}

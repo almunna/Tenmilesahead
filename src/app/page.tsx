@@ -784,22 +784,6 @@ function HomeInner() {
       for (const docSnap of tSnap.docs) {
         const t = docSnap.data() as Trip;
 
-        // Track last location for chained distance calculation
-        let lastCity = t.city;
-        let lastState = t.state;
-        let lastCountry = t.country;
-
-        // Calculate distance from origin to main destination
-        const tripDistance = await calculateDistance(
-          t.originCity,
-          t.originState,
-          t.originCountry,
-          lastCity,
-          lastState,
-          lastCountry
-        );
-        totalMiles += tripDistance;
-
         // Calculate days for this trip
         if (t.startDate && t.endDate) {
           const start = new Date(t.startDate);
@@ -837,24 +821,34 @@ function HomeInner() {
             return 0;
           });
 
-        // Calculate distances between consecutive destinations
-        for (const dest of destinations) {
-          // Calculate distance from last location to this destination
-          if (dest.city && dest.country) {
-            const segmentDistance = await calculateDistance(
-              lastCity,
-              lastState,
-              lastCountry,
-              dest.city,
-              dest.state,
-              dest.country
-            );
-            totalMiles += segmentDistance;
+        // Build chronological list of all locations for this trip
+        // Start with main trip destination (using trip start date)
+        const allLocations: Array<{
+          city: string;
+          state: string | null | undefined;
+          country: string;
+          date: string;
+        }> = [];
 
-            // Update last location for next iteration
-            lastCity = dest.city;
-            lastState = dest.state;
-            lastCountry = dest.country;
+        // Add main trip destination with trip's start date
+        if (t.city && t.country) {
+          allLocations.push({
+            city: t.city,
+            state: t.state,
+            country: t.country,
+            date: t.startDate || '',
+          });
+        }
+
+        // Add all destinations from subcollection
+        for (const dest of destinations) {
+          if (dest.city && dest.country && dest.startDate) {
+            allLocations.push({
+              city: dest.city,
+              state: dest.state,
+              country: dest.country,
+              date: dest.startDate,
+            });
           }
 
           // Track locations from destinations
@@ -866,6 +860,42 @@ function HomeInner() {
           // Count transportation from destinations (skip Cruise - it doesn't affect stats)
           if (dest.transportationType && dest.transportationType !== "Cruise") {
             transportCounts[dest.transportationType] = (transportCounts[dest.transportationType] || 0) + 1;
+          }
+        }
+
+        // Sort all locations chronologically by date
+        allLocations.sort((a, b) => {
+          if (!a.date || !b.date) return 0;
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+
+        // Calculate distance: origin → first location → second location → etc.
+        if (allLocations.length > 0) {
+          // Distance from origin to first chronological location
+          const firstLoc = allLocations[0];
+          const originToFirst = await calculateDistance(
+            t.originCity,
+            t.originState,
+            t.originCountry,
+            firstLoc.city,
+            firstLoc.state,
+            firstLoc.country
+          );
+          totalMiles += originToFirst;
+
+          // Distance between consecutive locations
+          for (let i = 1; i < allLocations.length; i++) {
+            const prevLoc = allLocations[i - 1];
+            const currLoc = allLocations[i];
+            const segmentDistance = await calculateDistance(
+              prevLoc.city,
+              prevLoc.state,
+              prevLoc.country,
+              currLoc.city,
+              currLoc.state,
+              currLoc.country
+            );
+            totalMiles += segmentDistance;
           }
         }
 

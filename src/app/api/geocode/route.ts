@@ -29,14 +29,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Build query parts from most specific to least specific
-  const queryParts: string[] = [];
-  if (address) queryParts.push(address);
-  if (city) queryParts.push(city);
-  if (state) queryParts.push(state);
-  if (country) queryParts.push(country);
-
-  const queryString = queryParts.join(', ');
+  // Build query string for caching
+  const queryString = [address, city, state, country].filter(Boolean).join(', ');
   const cacheKey = queryString.toLowerCase();
 
   // Check cache first
@@ -313,8 +307,14 @@ export async function GET(request: NextRequest) {
     geocodeCache.set(cacheKey, null);
     return NextResponse.json({ coordinates: null });
   } catch (error) {
-    console.error(`Error geocoding ${queryString}:`, error);
-    geocodeCache.set(cacheKey, null);
-    return NextResponse.json({ coordinates: null }, { status: 500 });
+    console.error(`Error geocoding:`, error);
+    console.error('Query params:', { address, city, state, country });
+    return NextResponse.json(
+      {
+        error: 'Internal geocoding error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

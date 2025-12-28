@@ -30,7 +30,6 @@ export default function WorldMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
-  const markersByTripId = useRef<Map<string, any>>(new Map());
   const markersByDestId = useRef<Map<string, any>>(new Map());
   const countryLayersRef = useRef<any[]>([]);
   const [isClient, setIsClient] = useState(false);
@@ -119,7 +118,6 @@ export default function WorldMap({
     // Remove existing markers
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
-    markersByTripId.current.clear();
     markersByDestId.current.clear();
 
     // Remove existing country layers
@@ -143,20 +141,14 @@ export default function WorldMap({
       const L = await import("leaflet");
       const validCoordinates: any[] = [];
 
-      // Collect all visited countries from trips AND their destinations
+      // Collect all visited countries from destinations
       const visitedCountries = new Set<string>();
 
       // Collect all destinations from subcollections
       const allDestinations: Destination[] = [];
 
-      // FIRST: Collect countries and destinations from all trips
+      // Fetch destinations subcollection for each trip
       for (const trip of trips) {
-        // Add main trip country
-        if (trip.country) {
-          visitedCountries.add(trip.country.toLowerCase().trim());
-        }
-
-        // Fetch destinations subcollection for this trip
         try {
           const destSnap = await getDocs(
             collection(db, "trips", trip.id, "destinations")
@@ -182,22 +174,8 @@ export default function WorldMap({
         }
       }
 
-      // Create custom red pin icon for primary destinations
-      const primaryIcon = L.default.divIcon({
-        html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
-            fill="#DC2626"
-            stroke="#991B1B"
-            stroke-width="2"/>
-          <circle cx="16" cy="16" r="6" fill="white"/>
-        </svg>`,
-        className: "custom-leaflet-marker",
-        iconSize: [24, 32],
-        iconAnchor: [12, 32],
-        popupAnchor: [0, -32],
-      });
 
-      // Create custom red pin icon for additional destinations (same as primary)
+      // Create custom red pin icon for destinations
       const destinationIcon = L.default.divIcon({
         html: `<svg width="24" height="32" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
           <path d="M16 0C7.163 0 0 7.163 0 16c0 13 16 26 16 26s16-13 16-26C32 7.163 24.837 0 16 0z"
@@ -212,124 +190,72 @@ export default function WorldMap({
         popupAnchor: [0, -32],
       });
 
-      // SECOND: Add markers for primary trip destinations (red pins)
-      for (const trip of trips) {
-        // Skip if effect was cancelled
-        if (!isActive || !map.current) return;
-
-        // Skip trips without country for marker placement
-        if (!trip.country) {
-          continue;
-        }
-
-        // Try to get coordinates - the API will fallback to state/country if city is wrong
-        const coordinates = await getCoordinates(
-          trip.specificAddress,
-          trip.city,
-          trip.state,
-          trip.country
-        );
-
-        if (coordinates && map.current && isActive) {
-          // Create marker
-          const marker = L.default.marker([coordinates[1], coordinates[0]], {
-            icon: primaryIcon,
-          });
-
-          // Create popup
-          const popupContent = `
-            <div style="padding: 8px; min-width: 200px;">
-              <strong style="font-size: 14px;">${trip.name}</strong><br/>
-              <span style="color: #666; font-size: 12px;">
-                ${trip.city}, ${trip.state ? trip.state + ", " : ""}${
-            trip.country
-          }
-              </span><br/>
-              <button
-                onclick="window.openTripFlipbook('${trip.id}')"
-                style="
-                  margin-top: 8px;
-                  padding: 6px 12px;
-                  background: #66bfcc;
-                  color: white;
-                  border: none;
-                  border-radius: 4px;
-                  cursor: pointer;
-                  font-size: 12px;
-                "
-              >
-                View Flipbook
-              </button>
-            </div>
-          `;
-
-          marker.bindPopup(popupContent);
-          marker.addTo(map.current);
-          markersRef.current.push(marker);
-          markersByTripId.current.set(trip.id, marker);
-
-          validCoordinates.push([coordinates[1], coordinates[0]]);
-        }
-      }
-
-      // THIRD: Add markers for additional destinations from subcollections (blue pins)
+      // Add markers for all destinations (red pins)
+      // Process destinations sequentially to avoid overwhelming the geocoding API
       for (const dest of allDestinations) {
         // Skip if effect was cancelled
         if (!isActive || !map.current) return;
 
         if (!dest.country) continue;
 
-        const coordinates = await getCoordinates(
-          dest.specificAddress,
-          dest.city,
-          dest.state,
-          dest.country
-        );
+        try {
+          const coordinates = await getCoordinates(
+            dest.specificAddress,
+            dest.city,
+            dest.state,
+            dest.country
+          );
 
-        if (coordinates && map.current && isActive) {
-          const marker = L.default.marker([coordinates[1], coordinates[0]], {
-            icon: destinationIcon,
-          });
+          if (coordinates && map.current && isActive) {
+            const marker = L.default.marker([coordinates[1], coordinates[0]], {
+              icon: destinationIcon,
+            });
 
-          const locationStr = [dest.city, dest.state, dest.country]
-            .filter(Boolean)
-            .join(", ");
-          const popupContent = `
-            <div style="padding: 8px; min-width: 200px;">
-              <strong style="font-size: 14px;">${
-                dest.name || locationStr
-              }</strong><br/>
-              <span style="color: #666; font-size: 12px;">
-                ${locationStr}
-              </span><br/>
-              <span style="color: #888; font-size: 11px;">
-                Part of: ${dest.tripName}
-              </span><br/>
-              <button
-                onclick="window.openTripFlipbook('${dest.tripId}')"
-                style="
-                  margin-top: 8px;
-                  padding: 6px 12px;
-                  background: #66bfcc;
-                  color: white;
-                  border: none;
-                  border-radius: 4px;
-                  cursor: pointer;
-                  font-size: 12px;
-                "
-              >
-                View Flipbook
-              </button>
-            </div>
-          `;
+            const locationStr = [dest.city, dest.state, dest.country]
+              .filter(Boolean)
+              .join(", ");
+            const popupContent = `
+              <div style="padding: 8px; min-width: 200px;">
+                <strong style="font-size: 14px;">${
+                  dest.name || locationStr
+                }</strong><br/>
+                <span style="color: #666; font-size: 12px;">
+                  ${locationStr}
+                </span><br/>
+                <span style="color: #888; font-size: 11px;">
+                  Part of: ${dest.tripName}
+                </span><br/>
+                <button
+                  onclick="window.openTripFlipbook('${dest.tripId}')"
+                  style="
+                    margin-top: 8px;
+                    padding: 6px 12px;
+                    background: #66bfcc;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                  "
+                >
+                  View Flipbook
+                </button>
+              </div>
+            `;
 
-          marker.bindPopup(popupContent);
-          marker.addTo(map.current);
-          markersRef.current.push(marker);
-          markersByDestId.current.set(dest.id, marker);
+            marker.bindPopup(popupContent);
+            marker.addTo(map.current);
+            markersRef.current.push(marker);
+            markersByDestId.current.set(dest.id, marker);
 
-          validCoordinates.push([coordinates[1], coordinates[0]]);
+            validCoordinates.push([coordinates[1], coordinates[0]]);
+          }
+        } catch (error) {
+          // Silently continue with next destination if geocoding fails
         }
+
+        // Small delay between requests to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       // Store destinations in state for the sidebar
@@ -762,20 +688,6 @@ export default function WorldMap({
     };
   }, [trips, onOpenFlip, isClient]);
 
-  // Function to pan to a trip marker and open its popup
-  const handlePinClick = (tripId: string) => {
-    const marker = markersByTripId.current.get(tripId);
-    if (marker && map.current) {
-      // Pan to marker location
-      map.current.setView(marker.getLatLng(), 10, {
-        animate: true,
-        duration: 0.5,
-      });
-      // Open popup
-      marker.openPopup();
-    }
-  };
-
   // Function to pan to a destination marker and open its popup
   const handleDestPinClick = (destId: string) => {
     const marker = markersByDestId.current.get(destId);
@@ -814,33 +726,7 @@ export default function WorldMap({
         <div className="rounded-xl border border-border p-3 h-[350px] sm:h-[350px] md:h-[400px] lg:h-[410px] flex flex-col">
           <div className="text-sm font-semibold mb-2 shrink-0">All Pins</div>
           <ul className="flex-1 min-h-0 overflow-y-auto text-sm space-y-1 pr-1">
-            {/* Primary trip destinations (red pins) */}
-            {trips.map((t) => {
-              const fullLocation =
-                [t.city, t.state, t.country].filter(Boolean).join(", ") || "—";
-              return (
-                <li
-                  key={t.id}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <button
-                    onClick={() => handlePinClick(t.id)}
-                    className="flex-1 truncate text-left hover:text-[#66bfcc] transition-colors"
-                    title={`${t.name}\n${fullLocation}`}
-                  >
-                    <span className="mr-2 text-red-500">📍</span>
-                    {fullLocation}
-                  </button>
-                  <button
-                    className="navlink text-xs flex-shrink-0"
-                    onClick={() => onOpenFlip(t.id)}
-                  >
-                    View Flipbook
-                  </button>
-                </li>
-              );
-            })}
-            {/* Additional destinations from subcollections (red pins) */}
+            {/* Destinations (red pins) */}
             {destinations.map((d) => {
               const fullLocation =
                 [d.city, d.state, d.country].filter(Boolean).join(", ") || "—";
@@ -866,8 +752,8 @@ export default function WorldMap({
                 </li>
               );
             })}
-            {trips.length === 0 && destinations.length === 0 && (
-              <li className="text-muted-foreground">No trips yet.</li>
+            {destinations.length === 0 && (
+              <li className="text-muted-foreground">No destinations yet.</li>
             )}
           </ul>
         </div>
@@ -896,33 +782,79 @@ async function getCoordinates(
     return geocodeCache.get(cacheKey)!;
   }
 
-  try {
-    // Build query params
-    const params = new URLSearchParams();
-    if (address) params.set("address", address);
-    if (city) params.set("city", city);
-    if (state) params.set("state", state);
-    if (country) params.set("country", country);
+  // Helper function to try geocoding with specific parameters
+  async function tryGeocode(params: URLSearchParams): Promise<[number, number] | null> {
+    try {
+      const response = await fetch(`/api/geocode?${params.toString()}`);
 
-    // Call our API route instead of Nominatim directly (avoids CORS)
-    const response = await fetch(`/api/geocode?${params.toString()}`);
+      if (!response.ok) {
+        console.error("Geocode API error:", response.status, response.statusText);
+        return null;
+      }
 
-    if (!response.ok) {
-      geocodeCache.set(cacheKey, null);
+      const data = await response.json();
+      console.log("Geocode API response:", data);
+
+      if (data.coordinates) {
+        return data.coordinates;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Geocode API exception:", error);
       return null;
     }
+  }
 
-    const data = await response.json();
+  try {
+    // Strategy 1: Try with all available location data (address, city, state, country)
+    if (address || city) {
+      const params1 = new URLSearchParams();
+      if (address) params1.set("address", address);
+      if (city) params1.set("city", city);
+      if (state) params1.set("state", state);
+      if (country) params1.set("country", country);
 
-    if (data.coordinates) {
-      const coords: [number, number] = data.coordinates;
-      geocodeCache.set(cacheKey, coords);
-      return coords;
+      console.log("Trying full location:", { address, city, state, country });
+      const coords1 = await tryGeocode(params1);
+      if (coords1) {
+        geocodeCache.set(cacheKey, coords1);
+        return coords1;
+      }
     }
 
+    // Strategy 2: Try with state + country (fallback if city fails)
+    if (state && country) {
+      const params2 = new URLSearchParams();
+      params2.set("state", state);
+      params2.set("country", country);
+
+      console.log("Trying state + country:", { state, country });
+      const coords2 = await tryGeocode(params2);
+      if (coords2) {
+        geocodeCache.set(cacheKey, coords2);
+        return coords2;
+      }
+    }
+
+    // Strategy 3: Try with country only (final fallback)
+    if (country) {
+      const params3 = new URLSearchParams();
+      params3.set("country", country);
+
+      console.log("Trying country only:", { country });
+      const coords3 = await tryGeocode(params3);
+      if (coords3) {
+        geocodeCache.set(cacheKey, coords3);
+        return coords3;
+      }
+    }
+
+    console.warn("All geocoding strategies failed for:", { address, city, state, country });
     geocodeCache.set(cacheKey, null);
     return null;
   } catch (error) {
+    console.error("Geocode fallback exception:", error);
     geocodeCache.set(cacheKey, null);
     return null;
   }
