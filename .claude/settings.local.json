@@ -20,7 +20,8 @@
       "Bash(npm run:*)",
       "Bash(npm ls:*)",
       "Bash(curl:*)",
-      "Bash(python -m json.tool:*)"
+      "Bash(python -m json.tool:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

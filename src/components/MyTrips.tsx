@@ -23,11 +23,19 @@ import ConfirmModal from "@/components/modals/ConfirmModal";
 
 type WithId<T> = T & { id: string };
 
-export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
+export default function MyTrips({
+  trips,
+  dateFrom,
+  dateTo,
+  onDateChange,
+}: {
+  trips: WithId<Trip>[];
+  dateFrom: string;
+  dateTo: string;
+  onDateChange: (from: string, to: string) => void;
+}) {
   const [collapsedTrips, setCollapsedTrips] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
 
   const filteredTrips = useMemo(() => {
     const from = dateFrom ? new Date(dateFrom).getTime() : null;
@@ -52,7 +60,7 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
               type="date"
               className="input h-9 text-sm"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              onChange={(e) => onDateChange(e.target.value, dateTo)}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -61,14 +69,13 @@ export default function MyTrips({ trips }: { trips: WithId<Trip>[] }) {
               type="date"
               className="input h-9 text-sm"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              onChange={(e) => onDateChange(dateFrom, e.target.value)}
             />
           </div>
           <button
             className="navlink whitespace-nowrap text-sm px-3 py-1.5"
             onClick={() => {
-              setDateFrom("");
-              setDateTo("");
+              onDateChange("", "");
             }}
           >
             Clear

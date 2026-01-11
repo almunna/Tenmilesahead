@@ -686,6 +686,10 @@ function HomeInner() {
     }
   }
 
+  // Date range filter state
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
   // Trips (unchanged subscription)
   const [trips, setTrips] = useState<WithId<Trip>[]>([]);
   useEffect(() => {
@@ -702,6 +706,20 @@ function HomeInner() {
     });
     return () => unsub();
   }, [user]);
+
+  // Filtered trips based on date range
+  const filteredTrips = useMemo(() => {
+    if (!dateFrom && !dateTo) return trips;
+    const from = dateFrom ? new Date(dateFrom).getTime() : null;
+    const to = dateTo ? new Date(dateTo).getTime() : null;
+    return trips.filter((t) => {
+      const s = new Date(t.startDate).getTime();
+      const e = new Date(t.endDate).getTime();
+      if (from && e < from) return false;
+      if (to && s > to) return false;
+      return true;
+    });
+  }, [trips, dateFrom, dateTo]);
 
   // Aggregates for TravelOverview
   const [travelStats, setTravelStats] = useState({
@@ -721,12 +739,12 @@ function HomeInner() {
 
   // Set up real-time listeners for all trip subcollections
   useEffect(() => {
-    if (!user || trips.length === 0) return;
+    if (!user || filteredTrips.length === 0) return;
 
     const unsubscribers: (() => void)[] = [];
 
     // Listen to each trip's subcollections
-    for (const trip of trips) {
+    for (const trip of filteredTrips) {
       // Destinations
       unsubscribers.push(
         onSnapshot(collection(db, "trips", trip.id, "destinations"), () => {
@@ -762,16 +780,12 @@ function HomeInner() {
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [user, trips]);
+  }, [user, filteredTrips]);
 
   // Compute stats when trips or subcollections change
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const tSnap = await getDocs(
-        query(collection(db, "trips"), where("ownerId", "==", user.uid))
-      );
-
       const cSet = new Set<string>();
       const sSet = new Set<string>();
       const citySet = new Set<string>();
@@ -781,8 +795,9 @@ function HomeInner() {
       const transportCounts: Record<string, number> = {};
       const accommodationCounts: Record<string, number> = {};
 
-      for (const docSnap of tSnap.docs) {
-        const t = docSnap.data() as Trip;
+      // Use filtered trips instead of fetching all trips
+      for (const trip of filteredTrips) {
+        const t = trip as Trip;
 
         // Calculate days for this trip
         if (t.startDate && t.endDate) {
@@ -810,7 +825,7 @@ function HomeInner() {
 
         // Destinations - fetch and sort by startDate for proper ordering
         const destSnap = await getDocs(
-          collection(db, "trips", docSnap.id, "destinations")
+          collection(db, "trips", trip.id, "destinations")
         );
         const destinations = destSnap.docs
           .map((d) => d.data() as any)
@@ -901,7 +916,7 @@ function HomeInner() {
 
         // Activities subcollection
         const actSnap = await getDocs(
-          collection(db, "trips", docSnap.id, "activities")
+          collection(db, "trips", trip.id, "activities")
         );
         actSnap.forEach((a) => {
           const act = a.data() as any;
@@ -913,7 +928,7 @@ function HomeInner() {
 
         // Accommodations subcollection
         const accomSnap = await getDocs(
-          collection(db, "trips", docSnap.id, "accommodations")
+          collection(db, "trips", trip.id, "accommodations")
         );
         accomSnap.forEach((a) => {
           const acc = a.data() as any;
@@ -931,7 +946,7 @@ function HomeInner() {
 
         // Restaurants subcollection
         const restaurantSnap = await getDocs(
-          collection(db, "trips", docSnap.id, "restaurants")
+          collection(db, "trips", trip.id, "restaurants")
         );
         restaurantSnap.forEach((r) => {
           const rest = r.data() as any;
@@ -943,7 +958,7 @@ function HomeInner() {
 
         // Media (photos)
         const mediaSnap = await getDocs(
-          collection(db, "trips", docSnap.id, "media")
+          collection(db, "trips", trip.id, "media")
         );
         mediaSnap.forEach((m) => {
           const mm = m.data() as MediaItem;
@@ -952,7 +967,7 @@ function HomeInner() {
       }
 
       setTravelStats({
-        totalTrips: tSnap.docs.length,
+        totalTrips: filteredTrips.length,
         daysExplored: totalDays,
         photosCaptured: imgTotal,
         totalMiles: totalMiles,
@@ -963,7 +978,7 @@ function HomeInner() {
         accommodationCounts: accommodationCounts,
       });
     })();
-  }, [user, trips.length, statsVersion]);
+  }, [user, filteredTrips, statsVersion]);
 
   // Flipbook modal control
   const [flipTripId, setFlipTripId] = useState<string | null>(null);
@@ -1024,10 +1039,23 @@ function HomeInner() {
         )}
 
         {/* My Trips (moved to component) */}
-        <MyTrips trips={trips} />
+        <MyTrips
+          trips={trips}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateChange={(from, to) => {
+            setDateFrom(from);
+            setDateTo(to);
+          }}
+        />
 
         {/* World Map (moved to component) */}
-        <WorldMap trips={trips} onOpenFlip={(id) => setFlipTripId(id)} />
+        <WorldMap
+          trips={trips}
+          onOpenFlip={(id) => setFlipTripId(id)}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+        />
 
         {/* Travel Overview (moved to component) */}
         <TravelOverview stats={travelStats} />

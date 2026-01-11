@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ModalShell from "./ModalShell";
@@ -129,46 +129,155 @@ export default function ItineraryModal({
               {items.map((row, i) => {
                 const d = row.data;
                 return (
-                  <tr
-                    key={i}
-                    className="border-t border-border hover:bg-surface/50"
-                  >
-                    <td className="px-3 py-2">{row.kind}</td>
-                    <td className="px-3 py-2">{d.name || "—"}</td>
-                    <td className="px-3 py-2">
-                      {d.startDate ? (
-                        <>
-                          {fmtMDY(d.startDate)}
-                          {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
-                        </>
-                      ) : (
-                        ""
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {[d.address, d.city, d.state, d.country]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.subcollection !== "trip" ? (
-                        <button
-                          className="text-xs navlink"
-                          onClick={() =>
-                            setSelectedItem({
-                              id: d.id,
-                              name: d.name,
-                              subcollection: row.subcollection,
-                            })
-                          }
-                        >
-                          View Photos
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
+                  <React.Fragment key={i}>
+                    <tr className="border-t border-border hover:bg-surface/50">
+                      <td className="px-3 py-2">{row.kind}</td>
+                      <td className="px-3 py-2">{d.name || "—"}</td>
+                      <td className="px-3 py-2">
+                        {d.startDate ? (
+                          <>
+                            {fmtMDY(d.startDate)}
+                            {d.endDate ? ` → ${fmtMDY(d.endDate)}` : ""}
+                          </>
+                        ) : (
+                          ""
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        {[d.address, d.city, d.state, d.country]
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {/* Call icon */}
+                          {d.phoneNumber && (
+                            <a
+                              href={`tel:${d.phoneNumber}`}
+                              className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                              title="Call"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                                />
+                              </svg>
+                            </a>
+                          )}
+
+                          {/* Location/Directions icon */}
+                          {(d.address || d.city) && (
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                                [d.address, d.city, d.state, d.country]
+                                  .filter(Boolean)
+                                  .join(", ")
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                              title="Get Directions"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                              </svg>
+                            </a>
+                          )}
+
+                          {/* Website icon */}
+                          {d.websiteUrl && (
+                            <a
+                              href={
+                                d.websiteUrl.startsWith("http")
+                                  ? d.websiteUrl
+                                  : `https://${d.websiteUrl}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                              title="Visit Website"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                                />
+                              </svg>
+                            </a>
+                          )}
+
+                          {/* Photos icon */}
+                          {row.subcollection !== "trip" && (
+                            <button
+                              onClick={() =>
+                                setSelectedItem({
+                                  id: d.id,
+                                  name: d.name,
+                                  subcollection: row.subcollection,
+                                })
+                              }
+                              className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                              title="View Photos"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {d.notes && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-1.5">
+                          <div className="text-s text-muted-foreground">
+                            Notes: {d.notes}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
               {items.length === 0 && (
@@ -204,24 +313,132 @@ export default function ItineraryModal({
                       <div className="text-xs font-medium text-primary mb-1">
                         {row.kind}
                       </div>
-                      <div className="font-semibold text-sm truncate">
+                      <div className="font-semibold text-sm">
                         {d.name || "—"}
                       </div>
+                      {d.notes && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Notes: {d.notes}
+                        </div>
+                      )}
                     </div>
-                    {row.subcollection !== "trip" && (
-                      <button
-                        className="text-xs navlink flex-shrink-0"
-                        onClick={() =>
-                          setSelectedItem({
-                            id: d.id,
-                            name: d.name,
-                            subcollection: row.subcollection,
-                          })
-                        }
-                      >
-                        View
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Call icon */}
+                      {d.phoneNumber && (
+                        <a
+                          href={`tel:${d.phoneNumber}`}
+                          className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                          title="Call"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                            />
+                          </svg>
+                        </a>
+                      )}
+
+                      {/* Location/Directions icon */}
+                      {(d.address || d.city) && (
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                            [d.address, d.city, d.state, d.country]
+                              .filter(Boolean)
+                              .join(", ")
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                          title="Get Directions"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                          </svg>
+                        </a>
+                      )}
+
+                      {/* Website icon */}
+                      {d.websiteUrl && (
+                        <a
+                          href={
+                            d.websiteUrl.startsWith("http")
+                              ? d.websiteUrl
+                              : `https://${d.websiteUrl}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                          title="Visit Website"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 919-9"
+                            />
+                          </svg>
+                        </a>
+                      )}
+
+                      {/* Photos icon */}
+                      {row.subcollection !== "trip" && (
+                        <button
+                          onClick={() =>
+                            setSelectedItem({
+                              id: d.id,
+                              name: d.name,
+                              subcollection: row.subcollection,
+                            })
+                          }
+                          className="p-1.5 hover:bg-surface rounded-lg transition-colors"
+                          title="View Photos"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {d.startDate && (
@@ -231,7 +448,8 @@ export default function ItineraryModal({
                     </div>
                   )}
 
-                  {[d.address, d.city, d.state, d.country].filter(Boolean).length > 0 && (
+                  {[d.address, d.city, d.state, d.country].filter(Boolean)
+                    .length > 0 && (
                     <div className="text-xs text-muted-foreground">
                       {[d.address, d.city, d.state, d.country]
                         .filter(Boolean)

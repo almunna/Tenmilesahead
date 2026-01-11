@@ -23,9 +23,13 @@ type WithId<T> = T & { id: string };
 export default function WorldMap({
   trips,
   onOpenFlip,
+  dateFrom,
+  dateTo,
 }: {
   trips: WithId<Trip>[];
   onOpenFlip: (tripId: string) => void;
+  dateFrom?: string;
+  dateTo?: string;
 }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
@@ -129,6 +133,18 @@ export default function WorldMap({
       onOpenFlip(tripId);
     };
 
+    // Filter trips by date range
+    const filteredTrips = trips.filter((t) => {
+      if (!dateFrom && !dateTo) return true;
+      const from = dateFrom ? new Date(dateFrom).getTime() : null;
+      const to = dateTo ? new Date(dateTo).getTime() : null;
+      const s = new Date(t.startDate).getTime();
+      const e = new Date(t.endDate).getTime();
+      if (from && e < from) return false;
+      if (to && s > to) return false;
+      return true;
+    });
+
     // Add markers for each trip and highlight countries (async)
     const addMarkersAsync = async () => {
       // Wait a bit for map to be fully initialized
@@ -148,7 +164,7 @@ export default function WorldMap({
       const allDestinations: Destination[] = [];
 
       // Fetch destinations subcollection for each trip
-      for (const trip of trips) {
+      for (const trip of filteredTrips) {
         try {
           const destSnap = await getDocs(
             collection(db, "trips", trip.id, "destinations")
@@ -686,7 +702,7 @@ export default function WorldMap({
     return () => {
       isActive = false;
     };
-  }, [trips, onOpenFlip, isClient]);
+  }, [trips, onOpenFlip, isClient, dateFrom, dateTo]);
 
   // Function to pan to a destination marker and open its popup
   const handleDestPinClick = (destId: string) => {

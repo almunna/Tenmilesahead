@@ -17,6 +17,7 @@ type ReviewWithMedia = Review & {
   reviewCount?: number;
   address?: string;
   phone?: string;
+  websiteUrl?: string;
   visitDate?: string;
   notes?: string;
   cleanliness?: number;
@@ -59,6 +60,38 @@ function formatDateString(dateStr: string): string {
   }
   // Fallback to default formatting
   return new Date(dateStr).toLocaleDateString();
+}
+
+// Format phone number - supports US format and international numbers (up to 15 digits)
+function formatPhoneUS(input: string): string {
+  const digits = (input || "").replace(/\D+/g, "");
+
+  // If more than 10 digits, treat as international - format with country code
+  if (digits.length > 10) {
+    // Allow up to 15 digits (E.164 standard max)
+    const limited = digits.slice(0, 15);
+    // Format as: +XX XXX XXX XXXX or similar groupings
+    if (limited.length <= 11) {
+      // e.g., +1 555 456 7890
+      return `+${limited.slice(0, 1)} ${limited.slice(1, 4)} ${limited.slice(4, 7)} ${limited.slice(7)}`.trim();
+    } else if (limited.length <= 12) {
+      // e.g., +91 98765 43210
+      return `+${limited.slice(0, 2)} ${limited.slice(2, 7)} ${limited.slice(7)}`.trim();
+    } else {
+      // e.g., +123 456 789 0123
+      return `+${limited.slice(0, 3)} ${limited.slice(3, 6)} ${limited.slice(6, 9)} ${limited.slice(9)}`.trim();
+    }
+  }
+
+  // Standard US format for 10 or fewer digits
+  const a = digits.slice(0, 3); // area code
+  const b = digits.slice(3, 6); // first 3 digits
+  const c = digits.slice(6, 10); // last 4 digits
+
+  if (!a) return "";
+  if (!b) return `(${a}`;
+  if (!c) return `(${a}) ${b}`;
+  return `(${a}) ${b}-${c}`;
 }
 
 export default function GlobalReviewsPage() {
@@ -491,13 +524,45 @@ function GlobalReviewsInner() {
         valueRating: updatedReview.ratings.value,
         serviceRating: updatedReview.ratings.service,
         locationRating: updatedReview.ratings.safety,
+        address: updatedReview.address || null,
+        phoneNumber: updatedReview.phone || null,
+        websiteUrl: updatedReview.websiteUrl || null,
         coverMediaId: updatedReview.coverMediaId || null,
         coverPositionY: updatedReview.coverPositionY ?? 50,
         updatedAt: Date.now(),
       });
 
+      // Recalculate overall rating for the updated review
+      const ratings: number[] = [];
+      if (updatedReview.ratings.cleanliness) ratings.push(updatedReview.ratings.cleanliness);
+      if (updatedReview.ratings.value) ratings.push(updatedReview.ratings.value);
+      if (updatedReview.ratings.service) ratings.push(updatedReview.ratings.service);
+      if (updatedReview.ratings.safety) ratings.push(updatedReview.ratings.safety);
+      const overallRating = ratings.length > 0
+        ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length
+        : 0;
+
+      // Update the review in state without full reload
+      setAllReviews((prevReviews) => {
+        const updatedReviews = prevReviews.map((r) =>
+          r.id === updatedReview.id && r.tripId === updatedReview.tripId
+            ? {
+                ...updatedReview,
+                ratings: { ...updatedReview.ratings, overall: overallRating },
+                // Also update top-level rating properties for display
+                cleanliness: updatedReview.ratings.cleanliness,
+                service: updatedReview.ratings.service,
+                value: updatedReview.ratings.value,
+                safety: updatedReview.ratings.safety,
+              }
+            : r
+        );
+        // Re-group reviews with updated data
+        groupReviewsByPlace(updatedReviews);
+        return updatedReviews;
+      });
+
       setEditingReview(null);
-      loadReviews(); // Reload reviews
     } catch (error) {
       console.error("Error updating review:", error);
       alert("Failed to update review. Please try again.");
@@ -945,6 +1010,37 @@ function ReviewCard({
                     className="hover:text-[#66bfcc] hover:underline transition-colors"
                   >
                     {review.phone}
+                  </a>
+                </div>
+              )}
+
+              {review.websiteUrl && (
+                <div className="flex items-center gap-2 text-sm text-white/70 mb-2">
+                  <svg
+                    className="w-4 h-4 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                    />
+                  </svg>
+                  <a
+                    href={
+                      review.websiteUrl.startsWith("http")
+                        ? review.websiteUrl
+                        : `https://${review.websiteUrl}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:text-[#66bfcc] hover:underline transition-colors truncate"
+                  >
+                    {review.websiteUrl}
                   </a>
                 </div>
               )}
@@ -1451,7 +1547,7 @@ function EditReviewModal({
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Review Notes */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-white">Your Review</label>
+            <label className="text-sm font-medium text-white">Review</label>
             <textarea
               value={editedReview.notes || ""}
               onChange={(e) =>
@@ -1461,6 +1557,54 @@ function EditReviewModal({
               rows={5}
               placeholder="Share your experience..."
             />
+          </div>
+
+          {/* Contact & Location Details */}
+          <div className="space-y-4">
+            <h3 className="text-base sm:text-lg font-semibold text-white">Details</h3>
+
+            {/* Address */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white">Address</label>
+              <input
+                type="text"
+                value={editedReview.address || ""}
+                onChange={(e) =>
+                  setEditedReview({ ...editedReview, address: e.target.value })
+                }
+                className="w-full px-4 py-3 bg-[#3d5266] text-white rounded-lg border border-white/10 focus:border-[#66bfcc] focus:outline-none"
+                placeholder="123 Main Street"
+              />
+            </div>
+
+            {/* Phone Number */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white">Phone Number</label>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={editedReview.phone || ""}
+                onChange={(e) =>
+                  setEditedReview({ ...editedReview, phone: formatPhoneUS(e.target.value) })
+                }
+                className="w-full px-4 py-3 bg-[#3d5266] text-white rounded-lg border border-white/10 focus:border-[#66bfcc] focus:outline-none"
+                placeholder="(555) 123-4567"
+              />
+            </div>
+
+            {/* Website URL */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white">Website</label>
+              <input
+                type="url"
+                value={editedReview.websiteUrl || ""}
+                onChange={(e) =>
+                  setEditedReview({ ...editedReview, websiteUrl: e.target.value })
+                }
+                className="w-full px-4 py-3 bg-[#3d5266] text-white rounded-lg border border-white/10 focus:border-[#66bfcc] focus:outline-none"
+                placeholder="https://example.com"
+              />
+            </div>
           </div>
 
           {/* Ratings */}
