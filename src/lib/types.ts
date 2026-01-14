@@ -46,7 +46,7 @@ export type MediaItem = {
   id?: string;
   tripId: string;
   ownerId: string;
-  type: "image" | "video";
+  type: "image" | "video" | "document";
   storagePath: string;
   downloadURL: string;
   thumbURL?: string | null;
@@ -55,6 +55,10 @@ export type MediaItem = {
   durationSec?: number | null;
   caption?: string;
   createdAt: number;
+  // Document-specific fields
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
 };
 
 export type SubscriptionStatus =

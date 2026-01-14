@@ -58,12 +58,14 @@ service cloud.firestore {
         }
 
         function validMediaCreate() {
-          return (request.resource.data.type == "image" || request.resource.data.type == "video")
+          return (request.resource.data.type == "image" || request.resource.data.type == "video" || request.resource.data.type == "document")
             && request.resource.data.downloadURL is string
             && request.resource.data.createdAt is number
             && (!('caption' in request.resource.data) || request.resource.data.caption is string)
             && (!('fileName' in request.resource.data) || request.resource.data.fileName is string)
             && (!('size' in request.resource.data) || request.resource.data.size is number)
+            && (!('fileSize' in request.resource.data) || request.resource.data.fileSize is number)
+            && (!('mimeType' in request.resource.data) || request.resource.data.mimeType is string)
             && (!('contentType' in request.resource.data) || request.resource.data.contentType is string)
             && (!('linkedSubcollection' in request.resource.data) || request.resource.data.linkedSubcollection is string)
             && (!('linkedId' in request.resource.data) || request.resource.data.linkedId is string);

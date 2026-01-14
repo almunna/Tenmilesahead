@@ -168,10 +168,15 @@ export default function PlaceModal({
 
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [documentFiles, setDocumentFiles] = useState<File[]>([]);
   const fileKey = (f: File) => `${f.name}__${f.size}__${f.lastModified}`;
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const fs = Array.from(e.target.files || []);
     setFiles((prev) => [...prev, ...fs]);
+  }
+  function onPickDocuments(e: React.ChangeEvent<HTMLInputElement>) {
+    const fs = Array.from(e.target.files || []);
+    setDocumentFiles((prev) => [...prev, ...fs]);
   }
 
   useEffect(() => {
@@ -250,6 +255,29 @@ export default function PlaceModal({
         } as any);
       }
 
+      // Upload document files if any
+      for (const f of documentFiles) {
+        const mediaRef = doc(collection(db, "trips", tripId, "media"));
+        const safe = f.name.replace(/[^\w.\-]+/g, "_");
+        const path = `trip_media/${auth.currentUser?.uid}/${tripId}/${mediaRef.id}/${safe}`;
+        await uploadBytes(storageRef(storage, path), f);
+        const url = await getDownloadURL(storageRef(storage, path));
+
+        await setDoc(mediaRef, {
+          tripId,
+          type: "document",
+          storagePath: path,
+          downloadURL: url,
+          createdAt: Date.now(),
+          caption: `${singularize(title)} • ${form.name}`,
+          linkedSubcollection: subcollection,
+          linkedId: editingId,
+          fileName: f.name,
+          fileSize: f.size,
+          mimeType: f.type,
+        } as any);
+      }
+
       setEditingId(null);
     } else {
       // Create new
@@ -286,6 +314,29 @@ export default function PlaceModal({
           linkedId: rowRef.id,
         } as any);
       }
+
+      // Upload document files if any
+      for (const f of documentFiles) {
+        const mediaRef = doc(collection(db, "trips", tripId, "media"));
+        const safe = f.name.replace(/[^\w.\-]+/g, "_");
+        const path = `trip_media/${auth.currentUser?.uid}/${tripId}/${mediaRef.id}/${safe}`;
+        await uploadBytes(storageRef(storage, path), f);
+        const url = await getDownloadURL(storageRef(storage, path));
+
+        await setDoc(mediaRef, {
+          tripId,
+          type: "document",
+          storagePath: path,
+          downloadURL: url,
+          createdAt: Date.now(),
+          caption: `${singularize(title)} • ${form.name}`,
+          linkedSubcollection: subcollection,
+          linkedId: rowRef.id,
+          fileName: f.name,
+          fileSize: f.size,
+          mimeType: f.type,
+        } as any);
+      }
     }
 
     resetForm();
@@ -313,6 +364,7 @@ export default function PlaceModal({
       transportationMode: "",
     });
     setFiles([]);
+    setDocumentFiles([]);
     setEditingId(null);
   }
 
@@ -632,6 +684,44 @@ export default function PlaceModal({
                 placeholder="e.g., reservation details, opening hours"
                 rows={3}
               />
+            </div>
+
+            {/* Document Upload Section */}
+            <div className="mt-3">
+              <label className="label">Attach Files (PDF, Documents, etc.)</label>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.xls,.xlsx"
+                multiple
+                onChange={onPickDocuments}
+                className="input"
+              />
+              {documentFiles.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {documentFiles.map((file) => {
+                    const k = fileKey(file);
+                    return (
+                      <div
+                        key={k}
+                        className="flex items-center justify-between p-2 bg-gray-100 rounded text-sm"
+                      >
+                        <span className="truncate">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDocumentFiles((prev) =>
+                              prev.filter((f) => fileKey(f) !== k)
+                            )
+                          }
+                          className="text-red-600 hover:text-red-800 ml-2 flex-shrink-0"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="mt-3">

@@ -625,7 +625,7 @@ function TripInner() {
 
   // chronological order (oldest first) - cover is already shown in hero section
   const sortedMedia = useMemo(() => {
-    const arr = media.slice();
+    const arr = media.filter((m) => m.type === "image" || m.type === "video");
     // Sort chronologically by takenAt (if available) or createdAt
     // Use document ID as tiebreaker for stable sort when timestamps are equal
     arr.sort((a, b) => {
@@ -633,6 +633,19 @@ function TripInner() {
       const bWhen = getMillis((b as any).takenAt ?? b.createdAt);
       if (aWhen !== bWhen) return aWhen - bWhen;
       // Stable sort: use ID as tiebreaker
+      return (a.id || '').localeCompare(b.id || '');
+    });
+    return arr;
+  }, [media]);
+
+  // Documents (PDFs and other files)
+  const sortedDocuments = useMemo(() => {
+    const arr = media.filter((m) => m.type === "document");
+    // Sort chronologically by createdAt
+    arr.sort((a, b) => {
+      const aWhen = getMillis(a.createdAt);
+      const bWhen = getMillis(b.createdAt);
+      if (aWhen !== bWhen) return bWhen - aWhen; // newest first for documents
       return (a.id || '').localeCompare(b.id || '');
     });
     return arr;
@@ -1036,6 +1049,69 @@ function TripInner() {
             {sortedMedia.length === 0 && (
               <div className="text-muted-foreground">
                 No media yet. Use the uploader above.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Documents */}
+      {!error && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Documents</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sortedDocuments.map((m) => (
+              <div key={m.id} className="card space-y-2">
+                <div className="flex items-center gap-3 p-4 bg-haiti-800/5 rounded-lg">
+                  <svg className="w-10 h-10 text-muted-foreground flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {(m as any).fileName || "Document"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {(m as any).mimeType || "File"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <a
+                    href={m.downloadURL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm link"
+                  >
+                    Download
+                  </a>
+                  <button
+                    className="text-sm text-red-600"
+                    onClick={() => deleteMedia(m.id!)}
+                  >
+                    Delete
+                  </button>
+                </div>
+
+                <div>
+                  <label className="label">Caption</label>
+                  <textarea
+                    className="input h-auto min-h-[44px] leading-5 resize-none overflow-hidden"
+                    defaultValue={fixCaption(m.caption)}
+                    ref={autoSizeTextarea}
+                    onInput={(e) => autoSizeTextarea(e.currentTarget)}
+                    onBlur={(e) => saveCaption(m.id!, e.target.value)}
+                    placeholder="Add a caption…"
+                    rows={1}
+                  />
+                </div>
+              </div>
+            ))}
+            {sortedDocuments.length === 0 && (
+              <div className="text-muted-foreground">
+                No documents yet.
               </div>
             )}
           </div>

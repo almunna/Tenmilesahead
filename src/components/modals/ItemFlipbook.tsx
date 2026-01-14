@@ -73,7 +73,7 @@ export default function ItemFlipbook({
 
         <div className="flex-1 flex items-center justify-center relative overflow-hidden">
           {items.length === 0 ? (
-            <div className="text-white/80">No media for this item yet</div>
+            <div className="text-white/80">No media for this item yet.</div>
           ) : (
             <div className="w-full h-full flex items-center justify-center p-4">
               {items[index].type === "image" ? (
@@ -83,12 +83,34 @@ export default function ItemFlipbook({
                   alt={items[index].caption || ""}
                   draggable={false}
                 />
-              ) : (
+              ) : items[index].type === "video" ? (
                 <video
                   src={items[index].downloadURL}
                   className="max-h-full max-w-full rounded-xl"
                   controls
                 />
+              ) : (
+                <div className="flex flex-col items-center gap-6 p-8 bg-white/5 rounded-xl max-w-md">
+                  <svg className="w-24 h-24 text-white/60" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  </svg>
+                  <div className="text-center">
+                    <p className="text-white text-lg font-medium mb-2">
+                      {(items[index] as any).fileName || "Document"}
+                    </p>
+                    <p className="text-white/60 text-sm mb-6">
+                      {(items[index] as any).mimeType || "File"}
+                    </p>
+                    <a
+                      href={items[index].downloadURL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+                    >
+                      Download
+                    </a>
+                  </div>
+                </div>
               )}
             </div>
           )}
