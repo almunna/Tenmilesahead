@@ -59,6 +59,10 @@ Thumbs.db
 .vscode/
 *.iml
 
+# Claude Code temporary files
+tmpclaude-*-cwd
+.claude/
+
 # Docker
 docker-compose.override.yml
 # If you output any local runtime data:

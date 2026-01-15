@@ -1032,7 +1032,7 @@ function HomeInner() {
         {/* Display name with edit button - shows when username is set and not editing */}
         {username && !isEditingUsername && (
           <section className="rounded-2xl bg-primary p-6 text-white shadow-lg">
-            <p className="text-3xl font-bold">Welcome {username}!</p>
+            <p className="text-3xl font-bold text-center">Welcome {username}!</p>
             {/* Upcoming Trip Countdown */}
             <UpcomingTripCountdown trips={trips} />
           </section>
