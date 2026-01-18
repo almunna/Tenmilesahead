@@ -511,6 +511,7 @@ function GlobalReviewsInner() {
         country: data.country || "",
         address: data.address || null,
         phone: data.phoneNumber || null,
+        websiteUrl: data.websiteUrl || null,
         ratings: {
           overall: calculateOverallRating(data),
           cleanliness: data.qualityRating || 0,
@@ -607,6 +608,7 @@ function GlobalReviewsInner() {
         country: data.country || "",
         address: data.address || null,
         phone: data.phoneNumber || null,
+        websiteUrl: data.websiteUrl || null,
         ratings: {
           overall: calculateOverallRating(data),
           cleanliness: data.qualityRating || 0,

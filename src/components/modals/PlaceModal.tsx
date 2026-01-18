@@ -11,11 +11,14 @@ import {
   addDoc,
   setDoc,
   updateDoc,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
 import { COUNTRIES, getStates } from "@/lib/geo";
@@ -31,6 +34,14 @@ function singularize(title: string): string {
 }
 
 type WithId<T> = T & { id: string };
+
+type SavedDocument = {
+  id: string;
+  fileName: string;
+  downloadURL: string;
+  storagePath: string;
+  fileSize?: number;
+};
 
 type SimplePlace = {
   id?: string;
@@ -169,6 +180,7 @@ export default function PlaceModal({
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
+  const [savedDocuments, setSavedDocuments] = useState<SavedDocument[]>([]);
   const fileKey = (f: File) => `${f.name}__${f.size}__${f.lastModified}`;
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const fs = Array.from(e.target.files || []);
@@ -365,7 +377,44 @@ export default function PlaceModal({
     });
     setFiles([]);
     setDocumentFiles([]);
+    setSavedDocuments([]);
     setEditingId(null);
+  }
+
+  async function fetchSavedDocuments(placeId: string) {
+    const mediaQuery = query(
+      collection(db, "trips", tripId, "media"),
+      where("linkedId", "==", placeId),
+      where("type", "==", "document")
+    );
+    const snap = await getDocs(mediaQuery);
+    const docs: SavedDocument[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      docs.push({
+        id: d.id,
+        fileName: data.fileName || "Document",
+        downloadURL: data.downloadURL,
+        storagePath: data.storagePath,
+        fileSize: data.fileSize,
+      });
+    });
+    setSavedDocuments(docs);
+  }
+
+  async function deleteSavedDocument(savedDoc: SavedDocument) {
+    try {
+      // Delete from storage
+      const fileRef = storageRef(storage, savedDoc.storagePath);
+      await deleteObject(fileRef);
+    } catch (e) {
+      // File might not exist in storage, continue to delete from Firestore
+      console.warn("Could not delete file from storage:", e);
+    }
+    // Delete from Firestore
+    await deleteDoc(doc(db, "trips", tripId, "media", savedDoc.id));
+    // Update local state
+    setSavedDocuments((prev) => prev.filter((d) => d.id !== savedDoc.id));
   }
 
   function editRow(r: WithId<SimplePlace>) {
@@ -398,6 +447,8 @@ export default function PlaceModal({
         {}
       ),
     } as SimplePlace);
+    // Fetch saved documents for this place
+    fetchSavedDocuments(r.id!);
   }
 
   async function removeRow(id: string) {
@@ -689,6 +740,37 @@ export default function PlaceModal({
             {/* Document Upload Section */}
             <div className="mt-3">
               <label className="label">Attach Files (PDF, Documents, etc.)</label>
+
+              {/* Show saved documents when editing */}
+              {editingId && savedDocuments.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  <div className="text-xs text-muted-foreground mb-1">Saved documents:</div>
+                  {savedDocuments.map((savedDoc) => (
+                    <div
+                      key={savedDoc.id}
+                      className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-sm border border-blue-200 dark:border-blue-800"
+                    >
+                      <a
+                        href={savedDoc.downloadURL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-blue-600 dark:text-blue-400 hover:underline flex-1"
+                      >
+                        {savedDoc.fileName}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => deleteSavedDocument(savedDoc)}
+                        className="text-red-600 hover:text-red-800 ml-2 flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-100 dark:hover:bg-red-900/30"
+                        title="Delete document"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.txt,.xls,.xlsx"
@@ -698,12 +780,13 @@ export default function PlaceModal({
               />
               {documentFiles.length > 0 && (
                 <div className="mt-2 space-y-1">
+                  <div className="text-xs text-muted-foreground mb-1">New files to upload:</div>
                   {documentFiles.map((file) => {
                     const k = fileKey(file);
                     return (
                       <div
                         key={k}
-                        className="flex items-center justify-between p-2 bg-gray-100 rounded text-sm"
+                        className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-800 rounded text-sm"
                       >
                         <span className="truncate">{file.name}</span>
                         <button
@@ -713,9 +796,10 @@ export default function PlaceModal({
                               prev.filter((f) => fileKey(f) !== k)
                             )
                           }
-                          className="text-red-600 hover:text-red-800 ml-2 flex-shrink-0"
+                          className="text-red-600 hover:text-red-800 ml-2 flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-100 dark:hover:bg-red-900/30"
+                          title="Remove"
                         >
-                          Remove
+                          ✕
                         </button>
                       </div>
                     );
