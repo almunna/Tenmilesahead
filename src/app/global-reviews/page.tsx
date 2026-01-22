@@ -101,18 +101,18 @@ function formatPhoneUS(input: string): string {
       // e.g., +1 555 456 7890
       return `+${limited.slice(0, 1)} ${limited.slice(1, 4)} ${limited.slice(
         4,
-        7
+        7,
       )} ${limited.slice(7)}`.trim();
     } else if (limited.length <= 12) {
       // e.g., +91 98765 43210
       return `+${limited.slice(0, 2)} ${limited.slice(2, 7)} ${limited.slice(
-        7
+        7,
       )}`.trim();
     } else {
       // e.g., +123 456 789 0123
       return `+${limited.slice(0, 3)} ${limited.slice(3, 6)} ${limited.slice(
         6,
-        9
+        9,
       )} ${limited.slice(9)}`.trim();
     }
   }
@@ -181,18 +181,18 @@ function GlobalReviewsInner() {
 
   // Selected review for detail view
   const [selectedGroup, setSelectedGroup] = useState<GroupedReview | null>(
-    null
+    null,
   );
 
   // Edit modal state
   const [editingReview, setEditingReview] = useState<ReviewWithMedia | null>(
-    null
+    null,
   );
 
   // Delete confirmation modal state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [reviewToDelete, setReviewToDelete] = useState<ReviewWithMedia | null>(
-    null
+    null,
   );
 
   // Add review modal state
@@ -205,17 +205,72 @@ function GlobalReviewsInner() {
 
   // Store all trip docs for progressive loading
   const [tripDocs, setTripDocs] = useState<{ id: string; ownerId: string }[]>(
-    []
+    [],
   );
   const [loadedTripCount, setLoadedTripCount] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const TRIPS_PER_BATCH = 5; // Load reviews from 5 trips at a time
+  const [totalReviewCount, setTotalReviewCount] = useState<number>(0);
 
   // Load trips first, then load first batch of reviews
   useEffect(() => {
     loadTrips();
     loadAllCities();
   }, []);
+
+  // Update total count when filters change
+  useEffect(() => {
+    loadTotalReviewCount(selectedLocation, selectedType, selectedCruiseLine, selectedShipName);
+  }, [selectedLocation, selectedType, selectedCruiseLine, selectedShipName]);
+
+  const loadTotalReviewCount = async (
+    location: string,
+    type: string,
+    cruiseLine: string,
+    shipName: string
+  ) => {
+    try {
+      const tripsSnapshot = await getDocs(collection(db, "trips"));
+      let subcollections = ["destinations", "activities", "accommodations", "restaurants", "cruises"];
+
+      // Filter subcollections based on type
+      if (type !== "All Types") {
+        const typeMap: Record<string, string> = {
+          "Destinations": "destinations",
+          "Activities": "activities",
+          "Accommodations": "accommodations",
+          "Restaurants": "restaurants",
+          "Cruises": "cruises",
+        };
+        subcollections = typeMap[type] ? [typeMap[type]] : subcollections;
+      }
+
+      let count = 0;
+
+      const countPromises = tripsSnapshot.docs.flatMap((tripDoc) =>
+        subcollections.map((sub) =>
+          getDocs(collection(db, "trips", tripDoc.id, sub)).then((snap) => {
+            return snap.docs.filter((doc) => {
+              const data = doc.data();
+              // Filter by location
+              if (location !== "All Locations" && data.city !== location) return false;
+              // Filter by cruise line (only for cruises)
+              if (cruiseLine !== "All Cruise Lines" && sub === "cruises" && data.cruiseLine !== cruiseLine) return false;
+              // Filter by ship name (only for cruises)
+              if (shipName !== "All Ships" && sub === "cruises" && data.shipName !== shipName) return false;
+              return true;
+            }).length;
+          })
+        )
+      );
+
+      const counts = await Promise.all(countPromises);
+      count = counts.reduce((sum, c) => sum + c, 0);
+      setTotalReviewCount(count);
+    } catch (error) {
+      console.error("Error loading total review count:", error);
+    }
+  };
 
   const loadAllCities = async () => {
     try {
@@ -224,7 +279,13 @@ function GlobalReviewsInner() {
       const citySet = new Set<string>();
 
       // Define all subcollections to check
-      const subcollections = ["destinations", "activities", "accommodations", "restaurants", "cruises"];
+      const subcollections = [
+        "destinations",
+        "activities",
+        "accommodations",
+        "restaurants",
+        "cruises",
+      ];
 
       // Create all query promises upfront for parallel execution
       const allQueries: Promise<void>[] = [];
@@ -234,7 +295,7 @@ function GlobalReviewsInner() {
 
         subcollections.forEach((subcollection) => {
           const queryPromise = getDocs(
-            collection(db, "trips", tripId, subcollection)
+            collection(db, "trips", tripId, subcollection),
           ).then((subcollectionSnapshot) => {
             subcollectionSnapshot.forEach((doc) => {
               const city = doc.data().city;
@@ -284,7 +345,7 @@ function GlobalReviewsInner() {
 
   const loadReviewsFromTrips = async (
     trips: { id: string; ownerId: string }[],
-    existingReviews: ReviewWithMedia[]
+    existingReviews: ReviewWithMedia[],
   ) => {
     const reviewPromises: Promise<ReviewWithMedia[]>[] = [];
 
@@ -295,8 +356,8 @@ function GlobalReviewsInner() {
           trip.id,
           "destinations",
           "Destinations",
-          trip.ownerId
-        )
+          trip.ownerId,
+        ),
       );
 
       // Fetch activities
@@ -305,8 +366,8 @@ function GlobalReviewsInner() {
           trip.id,
           "activities",
           "Activities",
-          trip.ownerId
-        )
+          trip.ownerId,
+        ),
       );
 
       // Fetch accommodations
@@ -315,8 +376,8 @@ function GlobalReviewsInner() {
           trip.id,
           "accommodations",
           "Accommodations",
-          trip.ownerId
-        )
+          trip.ownerId,
+        ),
       );
 
       // Fetch restaurants
@@ -325,8 +386,8 @@ function GlobalReviewsInner() {
           trip.id,
           "restaurants",
           "Restaurants",
-          trip.ownerId
-        )
+          trip.ownerId,
+        ),
       );
 
       // Fetch cruises
@@ -335,8 +396,8 @@ function GlobalReviewsInner() {
           trip.id,
           "cruises",
           "Cruises",
-          trip.ownerId
-        )
+          trip.ownerId,
+        ),
       );
     }
 
@@ -355,11 +416,11 @@ function GlobalReviewsInner() {
     try {
       const nextBatch = tripDocs.slice(
         loadedTripCount,
-        loadedTripCount + TRIPS_PER_BATCH
+        loadedTripCount + TRIPS_PER_BATCH,
       );
       await loadReviewsFromTrips(nextBatch, allReviews);
       setLoadedTripCount((prev) =>
-        Math.min(prev + TRIPS_PER_BATCH, tripDocs.length)
+        Math.min(prev + TRIPS_PER_BATCH, tripDocs.length),
       );
     } catch (error) {
       console.error("Error loading more reviews:", error);
@@ -408,7 +469,13 @@ function GlobalReviewsInner() {
 
       // Load all reviews filtered by location
       const reviewPromises: Promise<ReviewWithMedia[]>[] = [];
-      const subcollections = ["destinations", "activities", "accommodations", "restaurants", "cruises"];
+      const subcollections = [
+        "destinations",
+        "activities",
+        "accommodations",
+        "restaurants",
+        "cruises",
+      ];
       const typeMap: Record<string, ReviewType> = {
         destinations: "Destinations",
         activities: "Activities",
@@ -425,8 +492,8 @@ function GlobalReviewsInner() {
               subcollection,
               typeMap[subcollection],
               trip.ownerId,
-              location
-            )
+              location,
+            ),
           );
         }
       }
@@ -449,19 +516,19 @@ function GlobalReviewsInner() {
     subcollection: string,
     type: ReviewType,
     ownerId?: string,
-    cityFilter?: string
+    cityFilter?: string,
   ): Promise<ReviewWithMedia[]> => {
     let q;
     if (cityFilter && cityFilter !== "All Locations") {
       q = query(
         collection(db, "trips", tripId, subcollection),
         where("city", "==", cityFilter),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "desc"),
       );
     } else {
       q = query(
         collection(db, "trips", tripId, subcollection),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "desc"),
       );
     }
 
@@ -490,14 +557,17 @@ function GlobalReviewsInner() {
         query(
           collection(db, "trips", tripId, "media"),
           where("linkedSubcollection", "==", subcollection),
-          where("linkedId", "==", doc.id)
-        )
+          where("linkedId", "==", doc.id),
+        ),
       );
 
-      const mediaItems: MediaItem[] = mediaSnapshot.docs.map((mediaDoc) => ({
-        id: mediaDoc.id,
-        ...mediaDoc.data(),
-      } as MediaItem));
+      const mediaItems: MediaItem[] = mediaSnapshot.docs.map(
+        (mediaDoc) =>
+          ({
+            id: mediaDoc.id,
+            ...mediaDoc.data(),
+          }) as MediaItem,
+      );
 
       reviews.push({
         id: doc.id,
@@ -552,13 +622,13 @@ function GlobalReviewsInner() {
     tripId: string,
     subcollection: string,
     type: ReviewType,
-    ownerId?: string
+    ownerId?: string,
   ): Promise<ReviewWithMedia[]> => {
     const snapshot = await getDocs(
       query(
         collection(db, "trips", tripId, subcollection),
-        orderBy("createdAt", "desc")
-      )
+        orderBy("createdAt", "desc"),
+      ),
     );
 
     const reviews: ReviewWithMedia[] = [];
@@ -584,8 +654,8 @@ function GlobalReviewsInner() {
         query(
           collection(db, "trips", tripId, "media"),
           where("linkedSubcollection", "==", subcollection),
-          where("linkedId", "==", doc.id)
-        )
+          where("linkedId", "==", doc.id),
+        ),
       );
 
       const mediaItems: MediaItem[] = mediaSnapshot.docs.map(
@@ -593,7 +663,7 @@ function GlobalReviewsInner() {
           ({
             id: mediaDoc.id,
             ...mediaDoc.data(),
-          } as MediaItem)
+          }) as MediaItem,
       );
 
       reviews.push({
@@ -710,7 +780,7 @@ function GlobalReviewsInner() {
 
   // Get unique locations from reviews
   const uniqueLocations = Array.from(
-    new Set(allReviews.map((r) => r.city).filter((c) => c))
+    new Set(allReviews.map((r) => r.city).filter((c) => c)),
   ).sort();
 
   // Get unique cruise lines and ship names from reviews
@@ -718,8 +788,8 @@ function GlobalReviewsInner() {
     new Set(
       allReviews
         .filter((r) => r.type === "Cruises" && r.cruiseLine)
-        .map((r) => r.cruiseLine!)
-    )
+        .map((r) => r.cruiseLine!),
+    ),
   ).sort();
 
   const uniqueShipNames = Array.from(
@@ -729,10 +799,10 @@ function GlobalReviewsInner() {
         .filter(
           (r) =>
             selectedCruiseLine === "All Cruise Lines" ||
-            r.cruiseLine === selectedCruiseLine
+            r.cruiseLine === selectedCruiseLine,
         )
-        .map((r) => r.shipName!)
-    )
+        .map((r) => r.shipName!),
+    ),
   ).sort();
 
   // Filter grouped reviews based on selected filters
@@ -764,7 +834,7 @@ function GlobalReviewsInner() {
 
   // Flatten filtered reviews to individual review cards for pagination
   const allFilteredReviewCards = filteredReviews.flatMap((group) =>
-    group.reviews.map((review) => ({ group, review }))
+    group.reviews.map((review) => ({ group, review })),
   );
 
   // Get visible review cards based on pagination
@@ -797,8 +867,8 @@ function GlobalReviewsInner() {
           "trips",
           reviewToDelete.tripId,
           subcollection,
-          reviewToDelete.id!
-        )
+          reviewToDelete.id!,
+        ),
       );
 
       setDeleteConfirmOpen(false);
@@ -831,7 +901,7 @@ function GlobalReviewsInner() {
         "trips",
         updatedReview.tripId,
         subcollection,
-        updatedReview.id!
+        updatedReview.id!,
       );
 
       // Update the review document
@@ -878,7 +948,7 @@ function GlobalReviewsInner() {
                 value: updatedReview.ratings.value,
                 safety: updatedReview.ratings.safety,
               }
-            : r
+            : r,
         );
         // Re-group reviews with updated data
         groupReviewsByPlace(updatedReviews);
@@ -1129,17 +1199,8 @@ function GlobalReviewsInner() {
               </div>
             )}
           </div>
-
           <p className="text-sm text-white/70 mt-2">
-            {allReviews.length > 0 ? (
-              <>
-                Showing {Math.min(visibleCount, allFilteredReviewCards.length)}{" "}
-                of {allFilteredReviewCards.length} reviews
-                {loadedTripCount < tripDocs.length && ` (more available)`}
-              </>
-            ) : (
-              "Reviews are listed in chronological order."
-            )}
+            Showing {Math.min(visibleCount, allFilteredReviewCards.length)} of {totalReviewCount} reviews
           </p>
         </div>
       </div>
@@ -1341,7 +1402,7 @@ function ReviewCard({
                     review.address ||
                       `${review.placeName}, ${review.city}, ${
                         review.state || review.country
-                      }`
+                      }`,
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1568,7 +1629,10 @@ function ReviewDetailModal({
                 <button
                   onClick={() =>
                     setCurrentReviewIndex(
-                      Math.min(group.reviews.length - 1, currentReviewIndex + 1)
+                      Math.min(
+                        group.reviews.length - 1,
+                        currentReviewIndex + 1,
+                      ),
                     )
                   }
                   disabled={currentReviewIndex === group.reviews.length - 1}
@@ -1697,8 +1761,8 @@ function ReviewDetailModal({
               setCurrentPhotoIndex(
                 Math.min(
                   currentReview.mediaItems.length - 1,
-                  currentPhotoIndex + 1
-                )
+                  currentPhotoIndex + 1,
+                ),
               )
             }
             disabled={currentPhotoIndex === currentReview.mediaItems.length - 1}
@@ -1732,16 +1796,16 @@ function EditReviewModal({
 
   // Photo management state
   const [existingMedia, setExistingMedia] = useState<MediaItem[]>(
-    review.mediaItems || []
+    review.mediaItems || [],
   );
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [coverMediaId, setCoverMediaId] = useState<string | null>(
-    review.coverMediaId || review.mediaItems[0]?.id || null
+    review.coverMediaId || review.mediaItems[0]?.id || null,
   );
   const [newCoverKey, setNewCoverKey] = useState<string | null>(null);
   const [coverPosY, setCoverPosY] = useState<number>(
-    review.coverPositionY ?? 50
+    review.coverPositionY ?? 50,
   );
   const draggingRef = useRef(false);
 
@@ -1866,7 +1930,7 @@ function EditReviewModal({
 
       // Delete removed existing media
       const removedMedia = review.mediaItems.filter(
-        (m) => !existingMedia.find((em) => em.id === m.id)
+        (m) => !existingMedia.find((em) => em.id === m.id),
       );
       for (const media of removedMedia) {
         try {
@@ -1895,7 +1959,7 @@ function EditReviewModal({
   const renderStarRating = (
     value: number,
     onChange: (rating: number) => void,
-    label: string
+    label: string,
   ) => {
     return (
       <div className="space-y-1">
@@ -2031,7 +2095,7 @@ function EditReviewModal({
                     ...editedReview,
                     ratings: { ...editedReview.ratings, cleanliness: rating },
                   }),
-                "Quality"
+                "Quality",
               )}
 
               {renderStarRating(
@@ -2041,7 +2105,7 @@ function EditReviewModal({
                     ...editedReview,
                     ratings: { ...editedReview.ratings, service: rating },
                   }),
-                "Service"
+                "Service",
               )}
 
               {renderStarRating(
@@ -2051,7 +2115,7 @@ function EditReviewModal({
                     ...editedReview,
                     ratings: { ...editedReview.ratings, value: rating },
                   }),
-                "Value"
+                "Value",
               )}
 
               {renderStarRating(
@@ -2061,7 +2125,7 @@ function EditReviewModal({
                     ...editedReview,
                     ratings: { ...editedReview.ratings, safety: rating },
                   }),
-                "Location"
+                "Location",
               )}
             </div>
           </div>
@@ -2077,8 +2141,8 @@ function EditReviewModal({
               const coverMedia = coverMediaId
                 ? existingMedia.find((m) => m.id === coverMediaId)
                 : newCoverKey
-                ? null // new file selected as cover
-                : existingMedia[0];
+                  ? null // new file selected as cover
+                  : existingMedia[0];
               const coverUrl =
                 coverMedia?.downloadURL ||
                 (newCoverKey ? previews[newCoverKey] : null);
@@ -2371,7 +2435,7 @@ function AddReviewModal({
     try {
       // Find or create a trip for this user to store the review
       const tripsSnapshot = await getDocs(
-        query(collection(db, "trips"), where("ownerId", "==", userId))
+        query(collection(db, "trips"), where("ownerId", "==", userId)),
       );
 
       let tripId: string;
@@ -2430,7 +2494,7 @@ function AddReviewModal({
           startDate: visitDate || null,
           createdAt: Date.now(),
           updatedAt: Date.now(),
-        }
+        },
       );
 
       // Upload photos if any
@@ -2480,7 +2544,7 @@ function AddReviewModal({
           {
             coverMediaId: finalCoverMediaId,
             coverPositionY: coverPosY,
-          }
+          },
         );
       }
 
@@ -2496,7 +2560,7 @@ function AddReviewModal({
   const renderStarRating = (
     value: number,
     onChange: (rating: number) => void,
-    label: string
+    label: string,
   ) => {
     return (
       <div className="space-y-1">
