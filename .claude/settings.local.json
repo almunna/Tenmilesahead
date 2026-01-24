@@ -22,7 +22,8 @@
       "Bash(curl:*)",
       "Bash(python -m json.tool:*)",
       "Bash(git push:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(sshpass -p '5Va0sws7oaIwF9MB/C0l' ssh -o StrictHostKeyChecking=no root@5.181.218.54 \"echo ''Connected!'' && docker ps -a 2>/dev/null || echo ''Docker not running as service'' && which docker && ls -la /var/www/ 2>/dev/null || echo ''No /var/www'' && ls -la /home/ 2>/dev/null && systemctl list-units --type=service --state=running | grep -E ''nginx|apache|node|pm2'' || echo ''No web server found''\")"
     ],
     "deny": [],
     "ask": []
