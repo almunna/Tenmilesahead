@@ -133,24 +133,32 @@ function Landing() {
             Log your trips, create beautiful photo stories, and share your
             journey with the world
           </p>
-          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="mt-6 flex flex-col items-center justify-center gap-3">
             <button className="btn" onClick={handleStartJourney}>
               Start Your Journey!
             </button>
             <div className="flex items-center gap-3">
               <a
-                className="btn"
-                href="/subscrib"
+                href="https://play.google.com/store"
                 aria-label="Get it on Google Play"
+                className="inline-flex"
               >
-                Google Play
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg"
+                  alt="Get it on Google Play"
+                  className="h-10"
+                />
               </a>
               <a
-                className="btn"
-                href="/subscrie"
+                href="https://apps.apple.com/"
                 aria-label="Download on the App Store"
+                className="inline-flex"
               >
-                App Store
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  className="h-10"
+                />
               </a>
             </div>
           </div>

@@ -13,6 +13,30 @@ export default function SiteFooter() {
           <p className="mt-3 text-sm text-slate-600">
             Travel journals, photo flipbooks, and shared adventures.
           </p>
+          <div className="mt-4 flex gap-2">
+            <a
+              href="https://play.google.com/store"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                alt="Get it on Google Play"
+                className="h-10 w-auto"
+              />
+            </a>
+            <a
+              href="https://apps.apple.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                alt="Download on the App Store"
+                className="h-10 w-auto"
+              />
+            </a>
+          </div>
         </div>
 
         <div className="text-sm space-y-2">

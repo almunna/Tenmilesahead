@@ -209,7 +209,7 @@ function GlobalReviewsInner() {
   );
   const [loadedTripCount, setLoadedTripCount] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const TRIPS_PER_BATCH = 5; // Load reviews from 5 trips at a time
+  const REVIEWS_PER_LOAD = 10; // Load 10 reviews at a time
   const [totalReviewCount, setTotalReviewCount] = useState<number>(0);
 
   // Load trips first, then load first batch of reviews
@@ -331,10 +331,9 @@ function GlobalReviewsInner() {
       }));
       setTripDocs(trips);
 
-      // Load first batch of reviews
+      // Load reviews until we have REVIEWS_PER_LOAD
       if (trips.length > 0) {
-        await loadReviewsFromTrips(trips.slice(0, TRIPS_PER_BATCH), []);
-        setLoadedTripCount(Math.min(TRIPS_PER_BATCH, trips.length));
+        await loadReviewsUntilCount(trips, [], REVIEWS_PER_LOAD, 0);
       }
     } catch (error) {
       console.error("Error loading trips:", error);
@@ -343,85 +342,47 @@ function GlobalReviewsInner() {
     }
   };
 
-  const loadReviewsFromTrips = async (
+  const loadReviewsUntilCount = async (
     trips: { id: string; ownerId: string }[],
     existingReviews: ReviewWithMedia[],
+    targetCount: number,
+    startTripIndex: number
   ) => {
-    const reviewPromises: Promise<ReviewWithMedia[]>[] = [];
+    let currentReviews = [...existingReviews];
+    let tripIndex = startTripIndex;
 
-    for (const trip of trips) {
-      // Fetch destinations
-      reviewPromises.push(
-        fetchReviewsFromSubcollection(
-          trip.id,
-          "destinations",
-          "Destinations",
-          trip.ownerId,
-        ),
-      );
-
-      // Fetch activities
-      reviewPromises.push(
-        fetchReviewsFromSubcollection(
-          trip.id,
-          "activities",
-          "Activities",
-          trip.ownerId,
-        ),
-      );
-
-      // Fetch accommodations
-      reviewPromises.push(
-        fetchReviewsFromSubcollection(
-          trip.id,
-          "accommodations",
-          "Accommodations",
-          trip.ownerId,
-        ),
-      );
-
-      // Fetch restaurants
-      reviewPromises.push(
-        fetchReviewsFromSubcollection(
-          trip.id,
-          "restaurants",
-          "Restaurants",
-          trip.ownerId,
-        ),
-      );
-
-      // Fetch cruises
-      reviewPromises.push(
-        fetchReviewsFromSubcollection(
-          trip.id,
-          "cruises",
-          "Cruises",
-          trip.ownerId,
-        ),
-      );
+    while (currentReviews.length < targetCount && tripIndex < trips.length) {
+      const trip = trips[tripIndex];
+      const newReviews = await loadReviewsFromSingleTrip(trip);
+      currentReviews = [...currentReviews, ...newReviews];
+      tripIndex++;
     }
 
-    const results = await Promise.all(reviewPromises);
-    const newReviews = results.flat();
-    const allLoadedReviews = [...existingReviews, ...newReviews];
-
-    setAllReviews(allLoadedReviews);
-    groupReviewsByPlace(allLoadedReviews);
+    setAllReviews(currentReviews);
+    groupReviewsByPlace(currentReviews);
+    setLoadedTripCount(tripIndex);
+    return currentReviews;
   };
 
-  const loadMoreTrips = async () => {
+  const loadReviewsFromSingleTrip = async (trip: { id: string; ownerId: string }): Promise<ReviewWithMedia[]> => {
+    const reviewPromises: Promise<ReviewWithMedia[]>[] = [
+      fetchReviewsFromSubcollection(trip.id, "destinations", "Destinations", trip.ownerId),
+      fetchReviewsFromSubcollection(trip.id, "activities", "Activities", trip.ownerId),
+      fetchReviewsFromSubcollection(trip.id, "accommodations", "Accommodations", trip.ownerId),
+      fetchReviewsFromSubcollection(trip.id, "restaurants", "Restaurants", trip.ownerId),
+      fetchReviewsFromSubcollection(trip.id, "cruises", "Cruises", trip.ownerId),
+    ];
+    const results = await Promise.all(reviewPromises);
+    return results.flat();
+  };
+
+    const loadMoreTrips = async () => {
     if (loadingMore || loadedTripCount >= tripDocs.length) return;
 
     setLoadingMore(true);
     try {
-      const nextBatch = tripDocs.slice(
-        loadedTripCount,
-        loadedTripCount + TRIPS_PER_BATCH,
-      );
-      await loadReviewsFromTrips(nextBatch, allReviews);
-      setLoadedTripCount((prev) =>
-        Math.min(prev + TRIPS_PER_BATCH, tripDocs.length),
-      );
+      const targetCount = allReviews.length + REVIEWS_PER_LOAD;
+      await loadReviewsUntilCount(tripDocs, allReviews, targetCount, loadedTripCount);
     } catch (error) {
       console.error("Error loading more reviews:", error);
     } finally {
@@ -444,8 +405,7 @@ function GlobalReviewsInner() {
       setTripDocs(trips);
 
       if (trips.length > 0) {
-        await loadReviewsFromTrips(trips.slice(0, TRIPS_PER_BATCH), []);
-        setLoadedTripCount(Math.min(TRIPS_PER_BATCH, trips.length));
+        await loadReviewsUntilCount(trips, [], REVIEWS_PER_LOAD, 0);
       }
     } catch (error) {
       console.error("Error loading reviews:", error);

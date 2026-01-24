@@ -1,22 +1,22 @@
 "use client";
+import { useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading, profile } = useAuth();
-  if (loading) return <div className="container py-10">Loading…</div>;
-  if (!user) {
-    return (
-      <div className="container py-10">
-        <div className="card">
-          <h1 className="text-2xl font-semibold mb-2">Sign in required</h1>
-          <p className="mb-4">Please sign in to continue.</p>
-          <Link className="btn" href="/signin">
-            Go to Sign In
-          </Link>
-        </div>
-      </div>
-    );
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace(`/signin?redirect=${encodeURIComponent(pathname)}`);
+    }
+  }, [loading, user, pathname, router]);
+
+  if (loading || !user) {
+    return <div className="container py-10">Loading…</div>;
   }
   // Force user to set a username
   if (!profile?.username) {
