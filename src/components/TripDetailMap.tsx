@@ -439,7 +439,7 @@ export default function TripDetailMap({
 
       <div
         ref={mapContainer}
-        className="mt-4 min-h-[300px] w-full rounded-xl overflow-hidden border border-border"
+        className="mt-4 min-h-[500px] w-full rounded-xl overflow-hidden border border-border"
         style={{ position: "relative", zIndex: 1 }}
       />
     </div>

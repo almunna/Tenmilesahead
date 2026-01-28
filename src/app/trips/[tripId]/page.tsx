@@ -21,6 +21,7 @@ import Flipbook from "@/components/Flipbook";
 import EditTripModal from "@/components/EditTripModal";
 import TripDetailMap from "@/components/TripDetailMap";
 import Link from "next/link";
+import Image from "next/image";
 
 /* Helpers */
 function fmtMDY(s: string | undefined | null) {
@@ -996,14 +997,19 @@ function TripInner() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedMedia.map((m) => (
-              <div key={m.id} className="card space-y-2">
-                <div className="w-full h-60 rounded-lg overflow-hidden bg-haiti-800/5">
+              <div
+                key={m.id}
+                className="card space-y-2"
+                style={{ contentVisibility: "auto", containIntrinsicSize: "auto 320px" }}
+              >
+                <div className="relative w-full h-60 rounded-lg overflow-hidden bg-haiti-800/5">
                   {m.type === "image" ? (
-                    <img
+                    <Image
                       src={m.downloadURL}
                       alt={m.caption || ""}
-                      className="w-full h-full object-cover"
-                      decoding="async"
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                      className="object-cover"
                       loading="lazy"
                       draggable={false}
                     />

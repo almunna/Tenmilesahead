@@ -3,11 +3,12 @@ import { collection, onSnapshot, orderBy, query, doc } from "firebase/firestore"
 import { db } from "@/lib/firebase";
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { MediaItem, Trip } from "@/lib/types";
+import NextImage from "next/image";
 
 // Preload an image and return a promise
 function preloadImage(src: string): Promise<void> {
   return new Promise((resolve) => {
-    const img = new Image();
+    const img = new window.Image();
     img.onload = () => resolve();
     img.onerror = () => resolve(); // Don't block on errors
     img.src = src;
@@ -312,8 +313,8 @@ export default function Flipbook({
       setItems(arr);
       if (currentPage > arr.length) setCurrentPage(0);
 
-      // Preload first few images for faster initial display
-      const imagesToPreload = arr.slice(0, 5).filter(m => m.type === "image");
+      // Preload first 2 images for faster initial display (reduced from 5 for better performance)
+      const imagesToPreload = arr.slice(0, 2).filter(m => m.type === "image");
       imagesToPreload.forEach(m => preloadImage(m.downloadURL));
     });
     return () => unsub();
@@ -326,24 +327,18 @@ export default function Flipbook({
   // No artificial cover page - totalPages = number of photos
   const totalPages = photoItems.length;
 
-  // Preload adjacent images when page changes
+  // Preload only next image when page changes (reduced from 4 adjacent for better performance)
   useEffect(() => {
     if (photoItems.length === 0) return;
 
-    // Preload next 2 and previous 1 images
-    const indicesToPreload = [
-      currentPage,
-      currentPage + 1,
-      currentPage + 2,
-      currentPage - 1,
-    ].filter(i => i >= 0 && i < photoItems.length);
-
-    indicesToPreload.forEach(i => {
-      const item = photoItems[i];
+    // Only preload the next image to reduce memory pressure
+    const nextIndex = currentPage + 1;
+    if (nextIndex < photoItems.length) {
+      const item = photoItems[nextIndex];
       if (item?.type === "image") {
         preloadImage(item.downloadURL);
       }
-    });
+    }
   }, [currentPage, photoItems]);
 
   const goToPage = useCallback((newPage: number, direction: "next" | "prev") => {
@@ -592,6 +587,7 @@ export default function Flipbook({
                 <div className="flex-1 flex items-center justify-center bg-slate-100 relative min-h-0">
                   {currentMedia.type === "image" ? (
                     <img
+                      key={currentMedia.id}
                       src={currentMedia.downloadURL}
                       alt={currentMedia.caption || ""}
                       className="max-w-full max-h-full object-contain"
@@ -698,6 +694,7 @@ export default function Flipbook({
                     {photoItems[currentMediaIndex - 1]?.type === "image" ? (
                       <>
                         <img
+                          key={photoItems[currentMediaIndex - 1].id}
                           src={photoItems[currentMediaIndex - 1].downloadURL}
                           alt={photoItems[currentMediaIndex - 1].caption || ""}
                           className="max-w-full max-h-full object-contain"
@@ -783,6 +780,7 @@ export default function Flipbook({
                     {currentMedia.type === "image" ? (
                       <>
                         <img
+                          key={currentMedia.id}
                           src={currentMedia.downloadURL}
                           alt={currentMedia.caption || ""}
                           className="max-w-full max-h-full object-contain"
@@ -883,12 +881,12 @@ export default function Flipbook({
           <button
             key={item.id}
             onClick={() => goToPage(i, currentPage > i ? "prev" : "next")}
-            className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 transition-all ${
+            className={`relative flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 transition-all ${
               currentPage === i ? "border-primary ring-2 ring-primary/30" : "border-white/20 hover:border-white/40"
             }`}
           >
             {item.type === "image" ? (
-              <img src={item.downloadURL} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+              <NextImage src={item.downloadURL} alt="" fill sizes="48px" className="object-cover" loading="lazy" />
             ) : (
               <div className="w-full h-full bg-slate-700 flex items-center justify-center">
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white/60" fill="currentColor" viewBox="0 0 20 20">

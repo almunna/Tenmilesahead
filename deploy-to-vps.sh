@@ -29,7 +29,7 @@ echo "[2/7] Setting up application directory..."
 mkdir -p $APP_DIR
 cd $APP_DIR
 
-# Step 3: Clone the repository
+#Step 3: Clone the repository
 echo ""
 echo "[3/7] Cloning repository..."
 if [ -d ".git" ]; then
