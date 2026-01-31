@@ -21,9 +21,10 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { db, storage, auth } from "@/lib/firebase";
-import { COUNTRIES, getStates } from "@/lib/geo";
+import { COUNTRIES, getStates, matchCountryName, matchStateName } from "@/lib/geo";
 import { getPhotoTakenAt } from "@/lib/utils";
 import ItemFlipbook from "./ItemFlipbook";
+import PlaceAutocomplete from "../PlaceAutocomplete";
 
 // Properly singularize title names (Activities → Activity, Destinations → Destination, etc.)
 function singularize(title: string): string {
@@ -486,14 +487,35 @@ export default function PlaceModal({
         <div className="flex-1 px-4 md:px-6 py-4 overflow-y-auto">
           <div className="rounded-xl border border-border p-3">
             <div className="space-y-3">
-              {/* Name field - full width */}
+              {/* Name field - full width with autocomplete */}
               <div>
                 <label className="label">Name *</label>
-                <input
-                  className="input"
+                <PlaceAutocomplete
                   value={form.name || ""}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(value) => setForm({ ...form, name: value })}
+                  onPlaceSelect={(details) => {
+                    // Match country name to our COUNTRIES array
+                    const matchedCountry = matchCountryName(details.country);
+                    // Match state name to our STATES_BY_COUNTRY
+                    const matchedState = matchStateName(matchedCountry, details.state);
+
+                    setForm((prev) => ({
+                      ...prev,
+                      name: details.name || prev.name,
+                      country: matchedCountry || prev.country,
+                      state: matchedState || prev.state,
+                      city: details.city || prev.city,
+                      address: details.address || prev.address,
+                      phoneNumber: details.phoneNumber || prev.phoneNumber,
+                      websiteUrl: details.websiteUrl || prev.websiteUrl,
+                    }));
+                  }}
+                  placeholder="Search for a place..."
+                  className="input"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Type to search and auto-fill address details
+                </p>
               </div>
 
               {/* On Ship checkbox - only for restaurants, activities, accommodations */}

@@ -2363,3 +2363,117 @@ export const STATES_BY_COUNTRY: Record<string, string[]> = {
 
 export const getStates = (country?: string) =>
   (country && STATES_BY_COUNTRY[country]) || [];
+
+// Map Google Places country names to our COUNTRIES array
+const COUNTRY_NAME_MAP: Record<string, string> = {
+  "United States": "United States",
+  "USA": "United States",
+  "US": "United States",
+  "United Kingdom": "England", // Default to England, can be overridden
+  "UK": "England",
+  "Republic of Ireland": "Ireland",
+  "South Korea": "South Korea",
+  "Republic of Korea": "South Korea",
+  "Taiwan": "Taiwan",
+  "Republic of China": "Taiwan",
+  "Czech Republic": "Czechia",
+  "Czechia": "Czechia",
+  "UAE": "United Arab Emirates",
+  "U.S. Virgin Islands": "United States (USVI)",
+  "British Virgin Islands": "British Virgin Islands",
+  "Turks and Caicos Islands": "Turks and Caicos",
+  "Trinidad & Tobago": "Trinidad and Tobago",
+  "São Tomé and Príncipe": "São Tomé & Príncipe",
+  "St. Kitts and Nevis": "Saint Kitts and Nevis",
+  "St. Kitts & Nevis": "Saint Kitts and Nevis",
+  "St. Lucia": "Saint Lucia",
+  "St. Vincent and the Grenadines": "Saint Vincent and Grenadines",
+  "St. Barthélemy": "Saint Barthélemy (France)",
+  "Saint Barthélemy": "Saint Barthélemy (France)",
+  "Reunion": "Réunion (France)",
+  "Réunion": "Réunion (France)",
+  "New Caledonia": "New Caledonia (France)",
+  "Guadeloupe": "Guadeloupe (France)",
+  "Martinique": "Martinique (France)",
+  "Mayotte": "France (Mayotte)",
+  "Hong Kong": "China",
+  "Macau": "China",
+  "Macao": "China",
+};
+
+/**
+ * Match a country name from Google Places to our COUNTRIES array
+ * Returns the matched country or the original name if no match found
+ */
+export function matchCountryName(googleCountry: string): string {
+  if (!googleCountry) return "";
+
+  // Check exact match first
+  if (COUNTRIES.includes(googleCountry as any)) {
+    return googleCountry;
+  }
+
+  // Check mapping
+  const mapped = COUNTRY_NAME_MAP[googleCountry];
+  if (mapped && COUNTRIES.includes(mapped as any)) {
+    return mapped;
+  }
+
+  // Try case-insensitive search
+  const lowerGoogle = googleCountry.toLowerCase();
+  for (const country of COUNTRIES) {
+    if (country.toLowerCase() === lowerGoogle) {
+      return country;
+    }
+  }
+
+  // Try partial match (for cases like "United States of America")
+  for (const country of COUNTRIES) {
+    if (
+      lowerGoogle.includes(country.toLowerCase()) ||
+      country.toLowerCase().includes(lowerGoogle)
+    ) {
+      return country;
+    }
+  }
+
+  // Return original if no match found - user can select manually
+  return googleCountry;
+}
+
+/**
+ * Match a state/region name to our STATES_BY_COUNTRY for a given country
+ * Returns the matched state or the original name if no match found
+ */
+export function matchStateName(country: string, googleState: string): string {
+  if (!country || !googleState) return googleState || "";
+
+  const states = STATES_BY_COUNTRY[country];
+  if (!states || states.length === 0) return googleState;
+
+  // Check exact match
+  if (states.includes(googleState)) {
+    return googleState;
+  }
+
+  // Try case-insensitive search
+  const lowerGoogle = googleState.toLowerCase();
+  for (const state of states) {
+    if (state.toLowerCase() === lowerGoogle) {
+      return state;
+    }
+  }
+
+  // Try partial match
+  for (const state of states) {
+    if (
+      lowerGoogle.includes(state.toLowerCase()) ||
+      state.toLowerCase().includes(lowerGoogle)
+    ) {
+      return state;
+    }
+  }
+
+  // Return original if no match
+  return googleState;
+}
